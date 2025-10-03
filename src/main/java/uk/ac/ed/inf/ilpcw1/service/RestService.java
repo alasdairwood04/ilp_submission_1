@@ -6,6 +6,7 @@ import uk.ac.ed.inf.ilpcw1.data.LngLat;
 @Service // Marks this class as a Spring service component
 public class RestService {
     private static final double CLOSE_DISTANCE = 0.00015;
+    private static final double MOVE_LENGTH = 0.00015;
 
 
     public double calculateDistance(LngLat position1, LngLat position2) {
@@ -19,5 +20,19 @@ public class RestService {
     public boolean isCloseTo(LngLat position1, LngLat position2) {
         double distance = calculateDistance(position1, position2);
         return distance < CLOSE_DISTANCE;
+    }
+
+
+    public LngLat nextPosition(LngLat start, double angle) {
+        double angleInRadians = Math.toRadians(angle);
+
+        double lngChange = MOVE_LENGTH * Math.cos(angleInRadians);
+        double latChange = MOVE_LENGTH * Math.sin(angleInRadians);
+
+        // Create new position
+        double newLng = start.getLongitude() + lngChange;
+        double newLat = start.getLatitude() + latChange;
+
+        return new LngLat(newLng, newLat);
     }
 }

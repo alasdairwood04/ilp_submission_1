@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import uk.ac.ed.inf.ilpcw1.data.CloseToRequest;
 import uk.ac.ed.inf.ilpcw1.data.DistanceRequest;
 import uk.ac.ed.inf.ilpcw1.service.RestService;
 import uk.ac.ed.inf.ilpcw1.service.ValidationService;
@@ -42,5 +43,12 @@ public class RestServiceController {
 
         double distance = restService.calculateDistance(request.getPosition1(), request.getPosition2());
         return ResponseEntity.ok(distance);
+    }
+
+    @PostMapping("/isCloseTo")
+    public ResponseEntity<Boolean> isCloseTo(@RequestBody CloseToRequest request) {
+        boolean isClose = restService.isCloseTo(request.getPosition1(), request.getPosition2());
+        return ResponseEntity.ok(isClose);
+
     }
 }

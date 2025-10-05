@@ -67,6 +67,16 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorBody, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(InvalidCoordinateException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidCoordinateException(InvalidCoordinateException ex) {
+        logger.warn("Invalid coordinate: {}", ex.getMessage());
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "Bad Request");
+        error.put("message", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+
     /**
      * A catch-all handler for any other unhandled exceptions.
      * This ensures that the client always gets a JSON response, not a stack trace.

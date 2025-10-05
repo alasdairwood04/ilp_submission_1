@@ -28,33 +28,15 @@ public class RestServiceController {
 
     }
 
-
     @GetMapping("/uid")
     public String getStudentId() {
         return "s2524182";
     }
 
     @PostMapping("/distanceTo")
-    public ResponseEntity<Double> calculateDistance(@Valid @RequestBody DistanceRequest request) {
-        // 1. Check for null main objects
-        if (request.getPosition1() == null || request.getPosition2() == null) {
-            throw new InvalidRequestException("Request must include both 'position1' and 'position2'.");
-        }
-
-        // 2. ensure that fields within each position are lng and lat
-        if (!validationService.isValidPositionFormat(request.getPosition1())) {
-            throw new InvalidRequestException("The 'position1' field must contain valid 'lng' and 'lat' values.");
-        }
-
-        // 2. Use the validation service, which can throw the specific exception
-        if (!validationService.isValidLngLat(request.getPosition1())) {
-            throw new InvalidCoordinateException("The coordinates for 'position1' are invalid or out of range.");
-        }
-
-        if (!validationService.isValidLngLat(request.getPosition2())) {
-            throw new InvalidCoordinateException("The coordinates for 'position2' are invalid or out of range.");
-        }
-
+    public ResponseEntity<Double> calculateDistance(@RequestBody DistanceRequest request) {
+        // Validate the entire request
+        validationService.validateDistanceRequest(request);
 
         Double distance = restService.calculateDistance(request.getPosition1(), request.getPosition2());
         return ResponseEntity.ok(distance);

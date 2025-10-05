@@ -10,6 +10,11 @@ public class ValidationService {
         if (position == null) {
             return false;
         }
+
+        if (position.getLongitude() == null || position.getLatitude() == null) {
+            return false;
+        }
+
         double lng = position.getLongitude();
         double lat = position.getLatitude();
 
@@ -18,5 +23,9 @@ public class ValidationService {
         }
 
         return lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90;
+    }
+
+    public boolean isValidPositionFormat(LngLat position) {
+        return position != null;
     }
 }

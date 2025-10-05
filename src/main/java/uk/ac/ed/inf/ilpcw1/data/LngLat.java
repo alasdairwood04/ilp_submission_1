@@ -12,9 +12,11 @@ import jakarta.validation.constraints.NotNull;
 @NoArgsConstructor // generates a no-argument constructor
 public class LngLat {
 
-    @NotNull @JsonProperty("lng")
-    private double longitude;
+    @NotNull(message = "Longitude cannot be null")
+    @JsonProperty("lng")
+    private Double longitude;
 
-    @NotNull @JsonProperty("lat")
-    private double latitude;
+    @NotNull(message = "Latitude cannot be null")
+    @JsonProperty("lat")
+    private Double latitude;
 }

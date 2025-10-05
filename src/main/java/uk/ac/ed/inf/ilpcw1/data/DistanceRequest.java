@@ -1,6 +1,7 @@
 package uk.ac.ed.inf.ilpcw1.data;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -10,9 +11,11 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor // generates a constructor with all fields as parameters
 @NoArgsConstructor // generates a no-argument constructor
 public class DistanceRequest {
+    @NotNull
     @JsonProperty("position1")
     private LngLat position1;
 
+    @NotNull
     @JsonProperty("position2")
     private LngLat position2;
 }

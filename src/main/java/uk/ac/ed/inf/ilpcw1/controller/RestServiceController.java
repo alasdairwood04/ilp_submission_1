@@ -7,10 +7,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import uk.ac.ed.inf.ilpcw1.data.CloseToRequest;
-import uk.ac.ed.inf.ilpcw1.data.DistanceRequest;
-import uk.ac.ed.inf.ilpcw1.data.LngLat;
-import uk.ac.ed.inf.ilpcw1.data.NextPositionRequest;
+import uk.ac.ed.inf.ilpcw1.data.*;
 import uk.ac.ed.inf.ilpcw1.service.RestService;
 import uk.ac.ed.inf.ilpcw1.service.ValidationService;
 
@@ -58,4 +55,11 @@ public class RestServiceController {
         LngLat position = restService.nextPosition(request.getStart(), request.getAngle());
         return ResponseEntity.ok(position);
     }
+
+    @PostMapping("/isInRegion")
+    public ResponseEntity<LngLat> isInRegion(@RequestBody RegionRequest request) {
+        boolean insideRegion = restService.isInRegion(request.getPosition(), request.getRegion());
+        return ResponseEntity.ok(insideRegion);
+    }
+
 }

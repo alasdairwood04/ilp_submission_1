@@ -2,6 +2,7 @@ package uk.ac.ed.inf.ilpcw1.service;
 
 import org.springframework.stereotype.Service;
 import uk.ac.ed.inf.ilpcw1.data.LngLat;
+import uk.ac.ed.inf.ilpcw1.data.Region;
 
 @Service // Marks this class as a Spring service component
 public class RestService {
@@ -34,5 +35,31 @@ public class RestService {
         double newLat = start.getLatitude() + latChange;
 
         return new LngLat(newLng, newLat);
+    }
+
+
+    public boolean isInRegion(LngLat position, Region region) {
+        var vertices = region.getVertices();
+
+        // Check if region is closed (first vertex equals last vertex)
+        LngLat first = vertices.get(0);
+        LngLat last = vertices.get(vertices.size() - 1);
+
+//        if (!arePositionsEqual(first, last)) {
+//
+//        }
+
+        return true;
+    }
+
+    private boolean arePositionsEqual(LngLat first, LngLat last) {
+        double first_lat = first.getLatitude();
+        double first_lng = first.getLongitude();
+
+        double last_lat = last.getLatitude();
+        double last_lng = last.getLongitude();
+
+        // if coordinates equal
+        return first_lat == last_lat && first_lng == last_lng;
     }
 }

@@ -1,34 +1,15 @@
 package uk.ac.ed.inf.ilpcw1.service;
 
 import org.springframework.stereotype.Service;
+import uk.ac.ed.inf.ilpcw1.data.CloseToRequest;
 import uk.ac.ed.inf.ilpcw1.data.DistanceRequest;
 import uk.ac.ed.inf.ilpcw1.data.LngLat;
+import uk.ac.ed.inf.ilpcw1.data.NextPositionRequest;
 import uk.ac.ed.inf.ilpcw1.exception.InvalidCoordinateException;
 import uk.ac.ed.inf.ilpcw1.exception.InvalidRequestException;
 
 @Service
 public class ValidationService {
-
-    public void validateDistanceRequest(DistanceRequest request) {
-        // Check for null request
-        if (request == null) {
-            throw new InvalidRequestException("Request body cannot be null");
-        }
-
-        // Check for null positions
-        if (request.getPosition1() == null) {
-            throw new InvalidRequestException("'position1' is required");
-        }
-        if (request.getPosition2() == null) {
-            throw new InvalidRequestException("'position2' is required");
-        }
-
-        // Validate position1
-        validateLngLat(request.getPosition1(), "position1");
-
-        // Validate position2
-        validateLngLat(request.getPosition2(), "position2");
-    }
 
     private void validateLngLat(LngLat position, String fieldName) {
         // Check for null fields
@@ -56,6 +37,82 @@ public class ValidationService {
         }
         if (lat < -90 || lat > 90) {
             throw new InvalidCoordinateException(fieldName + ".lat must be between -90 and 90");
+        }
+    }
+
+
+    public void validateDistanceRequest(DistanceRequest request) {
+        // Check for null request
+        if (request == null) {
+            throw new InvalidRequestException("Request body cannot be null");
+        }
+
+        // Check for null positions
+        if (request.getPosition1() == null) {
+            throw new InvalidRequestException("'position1' is required");
+        }
+        if (request.getPosition2() == null) {
+            throw new InvalidRequestException("'position2' is required");
+        }
+
+        // Validate position1
+        validateLngLat(request.getPosition1(), "position1");
+
+        // Validate position2
+        validateLngLat(request.getPosition2(), "position2");
+    }
+
+    public void validateCloseTo (CloseToRequest request) {
+        // Check for null request
+        if (request == null) {
+            throw new InvalidRequestException("Request body cannot be null");
+        }
+
+        // Check for null positions
+        if (request.getPosition1() == null) {
+            throw new InvalidRequestException("'position1' is required");
+        }
+        if (request.getPosition2() == null) {
+            throw new InvalidRequestException("'position2' is required");
+        }
+
+        // Validate position1
+        validateLngLat(request.getPosition1(), "position1");
+
+        // Validate position2
+        validateLngLat(request.getPosition2(), "position2");
+    }
+
+
+    public void validateNextPositionRequest(NextPositionRequest request) {
+        // Check for null request
+        if (request == null) {
+            throw new InvalidRequestException("Request body cannot be null");
+        }
+
+        // Check for null start position
+        if (request.getStart() == null) {
+            throw new InvalidRequestException("'start' is required");
+        }
+
+        // Validate start position
+        validateLngLat(request.getStart(), "start");
+
+        // Check for null angle
+        if (request.getAngle() == null) {
+            throw new InvalidRequestException("'angle' is required");
+        }
+
+        double angle = request.getAngle();
+
+        // Check for NaN or Infinity
+        if (Double.isNaN(angle) || Double.isInfinite(angle)) {
+            throw new InvalidCoordinateException("'angle' must be a valid number");
+        }
+
+        // Check range
+        if (angle < 0 || angle >= 360) {
+            throw new InvalidCoordinateException("'angle' must be between 0 (inclusive) and 360 (exclusive)");
         }
     }
 }

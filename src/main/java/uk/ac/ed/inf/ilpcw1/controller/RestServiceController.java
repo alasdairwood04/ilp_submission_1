@@ -44,12 +44,18 @@ public class RestServiceController {
 
     @PostMapping("/isCloseTo")
     public ResponseEntity<Boolean> isCloseTo(@RequestBody CloseToRequest request) {
+        // Validate the entire request
+        validationService.validateCloseTo(request);
+
         boolean isClose = restService.isCloseTo(request.getPosition1(), request.getPosition2());
         return ResponseEntity.ok(isClose);
     }
 
     @PostMapping("/nextPosition")
     public ResponseEntity<LngLat> nextPosition(@RequestBody NextPositionRequest request) {
+        // Validate the entire request
+        validationService.validateNextPositionRequest(request);
+
         LngLat position = restService.nextPosition(request.getStart(), request.getAngle());
         return ResponseEntity.ok(position);
     }

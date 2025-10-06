@@ -3,6 +3,10 @@ package uk.ac.ed.inf.ilpcw1.service;
 import org.springframework.stereotype.Service;
 import uk.ac.ed.inf.ilpcw1.data.LngLat;
 import uk.ac.ed.inf.ilpcw1.data.Region;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
 
 @Service // Marks this class as a Spring service component
 public class RestService {
@@ -40,26 +44,55 @@ public class RestService {
 
     public boolean isInRegion(LngLat position, Region region) {
         var vertices = region.getVertices();
+        // logger to log the vertices
+        Logger logger = LoggerFactory.getLogger(RestService.class);
+        logger.info("Region vertices: " + vertices);
 
-        // Check if region is closed (first vertex equals last vertex)
-        LngLat first = vertices.get(0);
-        LngLat last = vertices.get(vertices.size() - 1);
+        // Check if the point is on any of the polygon's edges
+        boolean onEdge = isPointOnPolygonEdge(position, vertices);
+        if (onEdge) {
+            return true;
+        }
 
-//        if (!arePositionsEqual(first, last)) {
-//
-//        }
-
-        return true;
+        // Ray-casting algorithm to determine if the point is in the polygon
+        int intersectCount = getIntersectCount(position, vertices);
+        return intersectCount % 2 != 0;
     }
 
-    private boolean arePositionsEqual(LngLat first, LngLat last) {
-        double first_lat = first.getLatitude();
-        double first_lng = first.getLongitude();
+    private boolean isPointOnPolygonEdge(LngLat position, List<LngLat> vertices) {
+        for (int i = 0; i < vertices.size(); i++) {
+            LngLat v1 = vertices.get(i);
+            LngLat v2 = vertices.get((i + 1) % vertices.size());
 
-        double last_lat = last.getLatitude();
-        double last_lng = last.getLongitude();
+            // Check if the point is within the bounding box of the edge
+            if (Math.min(v1.getLongitude(), v2.getLongitude()) <= position.getLongitude() && position.getLongitude() <= Math.max(v1.getLongitude(), v2.getLongitude()) &&
+                    Math.min(v1.getLatitude(), v2.getLatitude()) <= position.getLatitude() && position.getLatitude() <= Math.max(v1.getLatitude(), v2.getLatitude())) {
 
-        // if coordinates equal
-        return first_lat == last_lat && first_lng == last_lng;
+                // Check if the area of the triangle formed by the point and the edge is zero (collinear)
+                double area = (v1.getLongitude() - position.getLongitude()) * (v2.getLatitude() - position.getLatitude()) -
+                        (v2.getLongitude() - position.getLongitude()) * (v1.getLatitude() - position.getLatitude());
+                if (Math.abs(area) < 1e-10) { // Use a small threshold to account for floating-point precision
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static int getIntersectCount(LngLat position, List<LngLat> vertices) {
+        int intersectCount = 0;
+        for (int i = 0; i < vertices.size(); i++) {
+            LngLat v1 = vertices.get(i);
+            LngLat v2 = vertices.get((i + 1) % vertices.size());
+
+            // Check if the ray intersects with the edge
+            if (((v1.getLatitude() > position.getLatitude()) != (v2.getLatitude() > position.getLatitude())) && // Compute the latitude intersection
+                    // Check if the point is to the left of the intersection point
+                    (position.getLongitude() < ((v2.getLongitude() - v1.getLongitude()) * (position.getLatitude()
+                            - v1.getLatitude())) / (v2.getLatitude() - v1.getLatitude()) + v1.getLongitude())) {
+                intersectCount++;
+            }
+        }
+        return intersectCount;
     }
 }

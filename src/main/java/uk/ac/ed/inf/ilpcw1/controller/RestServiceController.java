@@ -8,11 +8,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uk.ac.ed.inf.ilpcw1.data.*;
-import uk.ac.ed.inf.ilpcw1.exception.InvalidCoordinateException;
 import uk.ac.ed.inf.ilpcw1.service.RestService;
 import uk.ac.ed.inf.ilpcw1.service.ValidationService;
-import uk.ac.ed.inf.ilpcw1.exception.InvalidRequestException;
-import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -60,10 +57,12 @@ public class RestServiceController {
         return ResponseEntity.ok(position);
     }
 
-//    @PostMapping("/isInRegion")
-//    public ResponseEntity<LngLat> isInRegion(@RequestBody RegionRequest request) {
-//        boolean insideRegion = restService.isInRegion(request.getPosition(), request.getRegion());
-//        return ResponseEntity.ok(insideRegion);
-//    }
+    @PostMapping("/isInRegion")
+    public ResponseEntity<Boolean> isInRegion(@RequestBody RegionRequest request) {
+        // Validate the entire request
+        validationService.validateIsInRegionRequest(request);
 
+        boolean insideRegion = restService.isInRegion(request.getPosition(), request.getRegion());
+        return ResponseEntity.ok(insideRegion);
+    }
 }

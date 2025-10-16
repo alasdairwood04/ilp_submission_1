@@ -139,7 +139,8 @@ public class ValidationService {
             throw new InvalidRequestException("'region.name' is required and cannot be empty");
         }
 
-        // Check for null or insufficient vertices
+        // Check for null or insufficient vertices - using 4 because a closed polygon needs at least 4 points (first and last are the same)
+        // so a triangle would need 4 points to close
         if (region.getVertices() == null || region.getVertices().size() < 4) {
             throw new InvalidRequestException("'region.vertices' must contain at least 4 vertices to form a closed polygon");
         }

@@ -38,7 +38,10 @@ public class RestService {
         double newLng = start.getLongitude() + lngChange;
         double newLat = start.getLatitude() + latChange;
 
-        return new LngLat(newLng, newLat);
+        return LngLat.builder()
+                .longitude(newLng)
+                .latitude(newLat)
+                .build();
     }
 
 

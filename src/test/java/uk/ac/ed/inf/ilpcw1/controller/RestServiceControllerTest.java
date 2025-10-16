@@ -65,13 +65,18 @@ public class RestServiceControllerTest {
                         .latitude(55.942617)
                         .build())
                 .build();
+
+        // Mock the service method to return a specific distance
         when(restService.calculateDistance(any(LngLat.class),  any(LngLat.class))).thenReturn(0.003616000000000001);
 
+        // Perform the POST request and verify the response
         mockMvc.perform(post("/api/v1/distanceTo")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON) // set the content type header to json
+                        .content(objectMapper.writeValueAsString(request))) // set the request body
                 .andExpect(status().isOk())
                 .andExpect(content().string("0.003616000000000001"));
+
+        // verify that the validation and service methods were called
         verify(validationService, times(1)).validateDistanceRequest(any(DistanceRequest.class));
         verify(restService, times(1)).calculateDistance(any(LngLat.class), any(LngLat.class));
 

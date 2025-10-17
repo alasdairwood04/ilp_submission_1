@@ -30,6 +30,7 @@ public class RestService {
 
     /**
      * Check if two geographical positions are within a close distance.
+     * This relies on result of {@link #calculateDistance(LngLat, LngLat)}.
      * @param position1 - The first position.
      * @param position2 - The second position.
      * @return - True if the positions are within CLOSE_DISTANCE (0.00015), false otherwise.
@@ -43,7 +44,7 @@ public class RestService {
     /**
      * Calculate the next geographical position based on a starting position and an angle.
      * @param start - The starting geographical position.
-     * @param angle - The angle in degrees.
+     * @param angle - The angle in degrees (0 degrees is east/positive longitude change).
      * @return - The new geographical position after moving MOVE_LENGTH (0.00015) in the specified direction.
      */
     public LngLat nextPosition(LngLat start, double angle) {
@@ -65,6 +66,8 @@ public class RestService {
 
     /**
      * Check if a geographical position is inside a given region (polygon).
+     * Uses Ray casting algorithm to determine if the point is in the polygon.
+     * A point on the edge of the polygon is considered inside.
      * @param position - The geographical position to check.
      * @param region - The region defined by a polygon.
      * @return - True if the position is inside the region or on its edge, false otherwise.
@@ -88,6 +91,8 @@ public class RestService {
 
     /**
      * Check if a point is on the edge of a polygon.
+     * Checks if the point is collinear with any edge of the polygon and lies within that edge's bounding box.
+     * Tolerance of 1e-10 is used to account for floating-point precision.
      * @param position - The point to check.
      * @param vertices - The vertices of the polygon.
      * @return - True if the point is on the edge of the polygon, false otherwise.
@@ -114,9 +119,11 @@ public class RestService {
 
     /**
      * Count the number of times a horizontal ray from the point intersects with the edges of the polygon.
+     * Core of the Ray casting algorithm.
+     * Odd count means the point is inside, even count means outside.
      * @param position - The point from which the ray is cast.
      * @param vertices - The vertices of the polygon.
-     * @return - The number of intersections.
+     * @return - The number of intersections as an integer.
      */
     private static int getIntersectCount(LngLat position, List<LngLat> vertices) {
         int intersectCount = 0;

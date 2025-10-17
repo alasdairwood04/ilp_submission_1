@@ -550,145 +550,129 @@ public class RestServiceTest {
     class IsInRegionTests {
 
         private Region createRectangularRegion() {
-            List<LngLat> vertices = Arrays.asList(
-                    new LngLat(-3.192473, 55.946233),
-                    new LngLat(-3.192473, 55.942617),
-                    new LngLat(-3.184319, 55.942617),
-                    new LngLat(-3.184319, 55.946233),
-                    new LngLat(-3.192473, 55.946233)  // Closed polygon
-            );
-            return new Region("rectangle", vertices);
+            return Region.builder()
+                    .name("central")
+                    .vertices(Arrays.asList(
+                            LngLat.builder().longitude(-3.192473).latitude(55.946233).build(),
+                            LngLat.builder().longitude(-3.192473).latitude(55.942617).build(),
+                            LngLat.builder().longitude(-3.184319).latitude(55.942617).build(),
+                            LngLat.builder().longitude(-3.184319).latitude(55.946233).build(),
+                            LngLat.builder().longitude(-3.192473).latitude(55.946233).build()
+                    ))
+                    .build();
         }
 
         private Region createTriangularRegion() {
-            List<LngLat> vertices = Arrays.asList(
-                    new LngLat(2.0, 4.0),
-                    new LngLat(4.0, 8.0),
-                    new LngLat(6.0, 4.0),
-                    new LngLat(2.0, 4.0)  // Closed polygon - same as first
-            );
-            return new Region("triangle", vertices);
+            return Region.builder()
+                    .name("triangle")
+                    .vertices(Arrays.asList(
+                            LngLat.builder().longitude(2.0).latitude(4.0).build(),
+                            LngLat.builder().longitude(4.0).latitude(8.0).build(),
+                            LngLat.builder().longitude(6.0).latitude(4.0).build(),
+                            LngLat.builder().longitude(2.0).latitude(4.0).build() // Closed polygon - same as first
+                    ))
+                    .build();
         }
-
 
         private Region createConcaveRegion() {
             // U-shaped region
-            List<LngLat> vertices = Arrays.asList(
-                    new LngLat(-3.192473, 55.946233),
-                    new LngLat(-3.192473, 55.949000),
-                    new LngLat(-3.184319, 55.949000),
-                    new LngLat(-3.184319, 55.946233),
-                    new LngLat(-3.186000, 55.946233),
-                    new LngLat(-3.186000, 55.948000),
-                    new LngLat(-3.190792, 55.948000),
-                    new LngLat(-3.190792, 55.946233),
-                    new LngLat(-3.192473, 55.946233)  // Closed polygon
-            );
-            return new Region("concave", vertices);
+            return Region.builder()
+                    .name("concave")
+                    .vertices(Arrays.asList(
+                            LngLat.builder().longitude(-3.192473).latitude(55.946233).build(),
+                            LngLat.builder().longitude(-3.192473).latitude(55.949000).build(),
+                            LngLat.builder().longitude(-3.184319).latitude(55.949000).build(),
+                            LngLat.builder().longitude(-3.184319).latitude(55.946233).build(),
+                            LngLat.builder().longitude(-3.186000).latitude(55.946233).build(),
+                            LngLat.builder().longitude(-3.186000).latitude(55.948000).build(),
+                            LngLat.builder().longitude(-3.190792).latitude(55.948000).build(),
+                            LngLat.builder().longitude(-3.190792).latitude(55.946233).build(),
+                            LngLat.builder().longitude(-3.192473).latitude(55.946233).build() // Closed polygon
+                    ))
+                    .build();
         }
 
         private Region createConcaveRegion_simple() {
             // Simple concave region
-            List<LngLat> vertices = Arrays.asList(
-                    new LngLat(0.0, 0.0),
-                    new LngLat(0.0, 8.0),
-                    new LngLat(8.0, 8.0),
-                    new LngLat(8.0, 0.0), // Indentation
-                    new LngLat(6.0, 0.0),
-                    new LngLat(6.0, 5.0),  // Closed polygon
-                    new LngLat(2.0, 5.0),
-                    new LngLat(2.0, 0.0),
-                    new LngLat(0.0, 0.0)
-                    );
-            return new Region("concave_simple", vertices);
+            return Region.builder()
+                    .name("concave_simple")
+                    .vertices(Arrays.asList(
+                            LngLat.builder().longitude(0.0).latitude(0.0).build(),
+                            LngLat.builder().longitude(0.0).latitude(8.0).build(),
+                            LngLat.builder().longitude(8.0).latitude(8.0).build(),
+                            LngLat.builder().longitude(8.0).latitude(0.0).build(), // Indentation
+                            LngLat.builder().longitude(6.0).latitude(0.0).build(),
+                            LngLat.builder().longitude(6.0).latitude(5.0).build(),
+                            LngLat.builder().longitude(2.0).latitude(5.0).build(),
+                            LngLat.builder().longitude(2.0).latitude(0.0).build(),
+                            LngLat.builder().longitude(0.0).latitude(0.0).build()
+                    ))
+                    .build();
         }
-
 
         private Region createVerySmallRegion() {
             double size = 0.00001;
             double baseLng = -3.188396;
             double baseLat = 55.944425;
 
-            List<LngLat> vertices = Arrays.asList(
-                    new LngLat(baseLng, baseLat),
-                    new LngLat(baseLng, baseLat + size),
-                    new LngLat(baseLng + size, baseLat + size),
-                    new LngLat(baseLng + size, baseLat),
-                    new LngLat(baseLng, baseLat)  // Closed polygon
-            );
-            return new Region("very_small", vertices);
+            return Region.builder()
+                    .name("very_small")
+                    .vertices(Arrays.asList(
+                            LngLat.builder().longitude(baseLng).latitude(baseLat).build(),
+                            LngLat.builder().longitude(baseLng).latitude(baseLat + size).build(),
+                            LngLat.builder().longitude(baseLng + size).latitude(baseLat + size).build(),
+                            LngLat.builder().longitude(baseLng + size).latitude(baseLat).build(),
+                            LngLat.builder().longitude(baseLng).latitude(baseLat).build() // Closed polygon
+                    ))
+                    .build();
         }
 
         private Region createVeryLargeRegion() {
             double size = 1000.0;
-            List<LngLat> vertices = Arrays.asList(
-                    new LngLat(-size, -size),
-                    new LngLat(-size, size),
-                    new LngLat(size, size),
-                    new LngLat(size, -size),
-                    new LngLat(-size, -size)  // Closed polygon
-            );
-            return new Region("very_large", vertices);
+            return Region.builder()
+                    .name("very_large")
+                    .vertices(Arrays.asList(
+                            LngLat.builder().longitude(-size).latitude(-size).build(),
+                            LngLat.builder().longitude(-size).latitude(size).build(),
+                            LngLat.builder().longitude(size).latitude(size).build(),
+                            LngLat.builder().longitude(size).latitude(-size).build(),
+                            LngLat.builder().longitude(-size).latitude(-size).build() // Closed polygon
+                    ))
+                    .build();
         }
 
         private Region createIrregularConvexPolygon() {
-            List<LngLat> vertices = Arrays.asList(
-                    new LngLat(-3.192473, 55.946233),
-                    new LngLat(-3.191000, 55.949000),
-                    new LngLat(-3.187000, 55.950000),
-                    new LngLat(-3.184319, 55.949000),
-                    new LngLat(-3.183000, 55.947500),
-                    new LngLat(-3.184319, 55.944425),
-                    new LngLat(-3.187000, 55.942617),
-                    new LngLat(-3.190000, 55.943500),
-                    new LngLat(-3.192473, 55.946233)  // Closed polygon
-            );
-            return new Region("irregular_convex", vertices);
+            return Region.builder()
+                    .name("irregular_convex")
+                    .vertices(Arrays.asList(
+                            LngLat.builder().longitude(-3.192473).latitude(55.946233).build(),
+                            LngLat.builder().longitude(-3.191000).latitude(55.949000).build(),
+                            LngLat.builder().longitude(-3.187000).latitude(55.950000).build(),
+                            LngLat.builder().longitude(-3.184319).latitude(55.949000).build(),
+                            LngLat.builder().longitude(-3.183000).latitude(55.947500).build(),
+                            LngLat.builder().longitude(-3.184319).latitude(55.944425).build(),
+                            LngLat.builder().longitude(-3.187000).latitude(55.942617).build(),
+                            LngLat.builder().longitude(-3.190000).latitude(55.943500).build(),
+                            LngLat.builder().longitude(-3.192473).latitude(55.946233).build() // Closed polygon
+                    ))
+                    .build();
         }
 
         private Region createIrregularConvexPolygon_simple() {
-            List<LngLat> vertices = Arrays.asList(
-                    new LngLat(0.0, 4.0),
-                    new LngLat(1.0,7.0),
-                    new LngLat(5.0, 8.0),
-                    new LngLat(8.0, 7.0),
-                    new LngLat(9.0, 5.0),
-                    new LngLat(8.0, 2.0),
-                    new LngLat(5.0, 0.0),
-                    new LngLat(2.0, 1.0),
-                    new LngLat(0.0, 4.0)  // Closed polygon
-            );
-            return new Region("irregular_convex_simple", vertices);
-        }
-
-
-            private Region createStarShapedConcaveRegion() {
-            List<LngLat> vertices = Arrays.asList(
-                    new LngLat(-3.188396, 55.944425),
-                    new LngLat(-3.187000, 55.947000),
-                    new LngLat(-3.188396, 55.949000),
-                    new LngLat(-3.186000, 55.947500),
-                    new LngLat(-3.183000, 55.949000),
-                    new LngLat(-3.184319, 55.947000),
-                    new LngLat(-3.183000, 55.944425),
-                    new LngLat(-3.186000, 55.945500),
-                    new LngLat(-3.188396, 55.942617),
-                    new LngLat(-3.187000, 55.944425),
-                    new LngLat(-3.188396, 55.944425)  // Closed polygon
-            );
-            return new Region("star_shaped", vertices);
-        }
-
-        private Region createSelfIntersectingRegion() {
-            // Figure-8 shaped region
-            List<LngLat> vertices = Arrays.asList(
-                    new LngLat(-3.188396, 55.944425),
-                    new LngLat(-3.186000, 55.947000),
-                    new LngLat(-3.183000, 55.944425),
-                    new LngLat(-3.186000, 55.942617),
-                    new LngLat(-3.188396, 55.944425)  // Closed polygon
-            );
-            return new Region("self_intersecting", vertices);
+            return Region.builder()
+                    .name("irregular_convex_simple")
+                    .vertices(Arrays.asList(
+                            LngLat.builder().longitude(0.0).latitude(4.0).build(),
+                            LngLat.builder().longitude(1.0).latitude(7.0).build(),
+                            LngLat.builder().longitude(5.0).latitude(8.0).build(),
+                            LngLat.builder().longitude(8.0).latitude(7.0).build(),
+                            LngLat.builder().longitude(9.0).latitude(5.0).build(),
+                            LngLat.builder().longitude(8.0).latitude(2.0).build(),
+                            LngLat.builder().longitude(5.0).latitude(0.0).build(),
+                            LngLat.builder().longitude(2.0).latitude(1.0).build(),
+                            LngLat.builder().longitude(0.0).latitude(4.0).build() // Closed polygon
+                    ))
+                    .build();
         }
 
         @Test
@@ -811,12 +795,6 @@ public class RestServiceTest {
             assertFalse(restService.isInRegion(point, region),
                     "Point collinear with edge but outside should return false");
         }
-
-
-//                            new LngLat(-3.192473, 55.946233),
-//                    new LngLat(-3.184319, 55.942617),
-//                    new LngLat(-3.188396, 55.944425),
-//                    new LngLat(-3.192473, 55.946233)  // Closed polygon - same as first
 
 
         @Test

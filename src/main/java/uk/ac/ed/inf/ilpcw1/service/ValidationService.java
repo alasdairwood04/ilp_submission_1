@@ -4,10 +4,26 @@ import org.springframework.stereotype.Service;
 import uk.ac.ed.inf.ilpcw1.data.*;
 import uk.ac.ed.inf.ilpcw1.exception.InvalidCoordinateException;
 import uk.ac.ed.inf.ilpcw1.exception.InvalidRequestException;
+import uk.ac.ed.inf.ilpcw1.exception.InvalidAngleException;
 
 @Service
 public class ValidationService {
 
+    /**
+     * Validates a LngLat object to ensure its longitude and latitude are valid and within range.
+     *
+     * The validation checks include:
+     * 1. Both longitude and latitude fields are non-null.
+     * 2. Both values are valid, non-NaN, and non-infinite numbers.
+     * 3. Longitude is within the range [-180, 180].
+     * 4. Latitude is within the range [-90, 90].
+     *
+     * @param position The LngLat object to validate.
+     * @param fieldName The name of the field being validated (e.g., "position1") used in error messages.
+     * @throws InvalidRequestException If either longitude or latitude is null (missing).
+     * @throws InvalidCoordinateException If a coordinate is NaN, infinite, or outside the valid geographic range
+     * (longitude: [-180, 180], latitude: [-90, 90]).
+     */
     private void validateLngLat(LngLat position, String fieldName) {
         // Check for null fields
         if (position.getLongitude() == null) {
@@ -38,6 +54,18 @@ public class ValidationService {
     }
 
 
+    /**
+     * Validate a DistanceRequest object.
+     *
+     * Checks performed:
+     * 1. The request object is not null.
+     * 2. Both position1 and position2 are present (not null).
+     * 3. Each position's longitude and latitude are valid numbers and within acceptable geographic ranges
+     *
+     * @param request The DistanceRequest object to validate.
+     * @throws InvalidRequestException If the request or a required field (position1, position2) is null/missing.
+     * @throws InvalidCoordinateException If any coordinate within position1 or position2 is invalid (NaN, infinite, or out of range).
+     */
     public void validateDistanceRequest(DistanceRequest request) {
         // Check for null request
         if (request == null) {
@@ -59,6 +87,19 @@ public class ValidationService {
         validateLngLat(request.getPosition2(), "position2");
     }
 
+
+    /**
+     * Validate a CloseToRequest object.
+     *
+     * Checks performed:
+     * 1. The request object is not null.
+     * 2. Both position1 and position2 are present (not null).
+     * 3. Each position's longitude and latitude are valid numbers and within acceptable geographic ranges
+     *
+     * @param request - The CloseToRequest object to validate.
+     * @throws InvalidRequestException - If the request or a required field (position1, position2) is null/missing.
+     * @throws InvalidCoordinateException - If any coordinate within position1 or position2 is invalid (NaN, infinite, or out of range).
+     */
     public void validateCloseTo (CloseToRequest request) {
         // Check for null request
         if (request == null) {
@@ -80,6 +121,21 @@ public class ValidationService {
         validateLngLat(request.getPosition2(), "position2");
     }
 
+
+    /**
+     * Validate a NextPositionRequest object.
+     *
+     * Checks performed:
+     * 1. The request object is not null.
+     * 2. The start position and angle are present (not null).
+     * 3. The start position's longitude and latitude are valid numbers and within acceptable geographic ranges.
+     * 4. The angle is a valid number (not NaN or infinite) and within the range [0, 360).
+     *
+     * @param request - The NextPositionRequest object to validate.
+     * @throws InvalidRequestException - If the request or a required field (start, angle) is null/missing.
+     * @throws InvalidCoordinateException - If any coordinate within the start position is invalid (NaN, infinite, or out of range).
+     * @throws InvalidAngleException - If the angle is invalid (NaN, infinite, or out of range).
+     */
 
     public void validateNextPositionRequest(NextPositionRequest request) {
         // Check for null request
@@ -104,15 +160,33 @@ public class ValidationService {
 
         // Check for NaN or Infinity
         if (Double.isNaN(angle) || Double.isInfinite(angle)) {
-            throw new InvalidCoordinateException("'angle' must be a valid number");
+            throw new InvalidAngleException("'angle' must be a valid number");
         }
 
         // Check range
         if (angle < 0 || angle >= 360) {
-            throw new InvalidCoordinateException("'angle' must be between 0 (inclusive) and 360 (exclusive)");
+            throw new InvalidAngleException("'angle' must be between 0 (inclusive) and 360 (exclusive)");
         }
     }
 
+
+    /**
+     * Validate a RegionRequest object.
+     *
+     * Checks performed:
+     * 1. The request object is not null.
+     * 2. The position is present (not null) and valid.
+     * 3. The region is present (not null).
+     * 4. The region name is present (not null or empty).
+     * 5. The region has at least 4 vertices to form a closed polygon.
+     * 6. Each vertex's longitude and latitude are valid numbers and within acceptable geographic ranges.
+     * 7. The first and last vertices are the same to ensure the polygon is closed
+     *
+     * @param request - The RegionRequest object to validate.
+     * @throws InvalidRequestException - If the request or a required field (position, region, region.name, region.vertices) is null/missing or invalid.
+     * @throws InvalidCoordinateException - If any coordinate within the position or region vertices is invalid (NaN, infinite, or out of range).
+     *
+     */
     public void validateIsInRegionRequest(RegionRequest request) {
         // Check for null request
         if (request == null) {

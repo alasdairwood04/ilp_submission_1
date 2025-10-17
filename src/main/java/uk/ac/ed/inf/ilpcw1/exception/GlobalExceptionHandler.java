@@ -25,6 +25,8 @@ public class GlobalExceptionHandler {
 
     /**
      * Handles our custom InvalidRequestException and returns a 400 Bad Request.
+     * @param ex - the exception
+     * @return - ResponseEntity with error details being invalid request
      */
     @ExceptionHandler(InvalidRequestException.class)
     public ResponseEntity<Map<String, String>> handleInvalidRequestException(InvalidRequestException ex) {
@@ -36,7 +38,9 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Handles invalid JSON syntax for request bodies.
+     * Handles malformed JSON requests.
+     * @param ex - the exception
+     * @return - ResponseEntity with error details being malformed JSON
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, String>> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
@@ -48,7 +52,9 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Handles validation errors from @Valid annotation.
+     * Handles validation errors for request bodies annotated with @Valid.
+     * @param ex - the exception
+     * @return - ResponseEntity with error details being validation errors
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
@@ -67,6 +73,11 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorBody, HttpStatus.BAD_REQUEST);
     }
 
+    /**
+     * Handles our custom InvalidCoordinateException and returns a 400 Bad Request.
+     * @param ex - the exception
+     * @return - ResponseEntity with error details being invalid coordinate
+     */
     @ExceptionHandler(InvalidCoordinateException.class)
     public ResponseEntity<Map<String, String>> handleInvalidCoordinateException(InvalidCoordinateException ex) {
         logger.warn("Invalid coordinate: {}", ex.getMessage());
@@ -76,10 +87,24 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
+    /**
+     * Handles our custom InvalidAngleException and returns a 400 Bad Request.
+     * @param ex - the exception
+     * @return - ResponseEntity with error details being invalid angle
+     */
+    @ExceptionHandler(InvalidAngleException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidAngleException(InvalidAngleException ex) {
+        logger.warn("Invalid angle: {}", ex.getMessage());
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "Bad Request");
+        error.put("message", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
 
     /**
-     * A catch-all handler for any other unhandled exceptions.
-     * This ensures that the client always gets a JSON response, not a stack trace.
+     * Handles all other uncaught exceptions and returns a 500 Internal Server Error.
+     * @param ex - the exception
+     * @return - ResponseEntity with error details being internal server error
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<String> handleAllExceptions(Exception ex) {

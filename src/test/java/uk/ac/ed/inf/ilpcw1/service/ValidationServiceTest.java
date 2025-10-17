@@ -8,6 +8,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import uk.ac.ed.inf.ilpcw1.data.*;
+import uk.ac.ed.inf.ilpcw1.exception.InvalidAngleException;
 import uk.ac.ed.inf.ilpcw1.exception.InvalidCoordinateException;
 import uk.ac.ed.inf.ilpcw1.exception.InvalidRequestException;
 
@@ -369,8 +370,8 @@ class ValidationServiceTest {
                     .angle(angle)
                     .build();
 
-            InvalidCoordinateException exception = assertThrows(
-                    InvalidCoordinateException.class,
+            InvalidAngleException exception = assertThrows(
+                    InvalidAngleException.class,
                     () -> validationService.validateNextPositionRequest(request)
             );
             assertEquals("'angle' must be between 0 (inclusive) and 360 (exclusive)", exception.getMessage());
@@ -384,8 +385,8 @@ class ValidationServiceTest {
                     .angle(Double.NaN)
                     .build();
 
-            InvalidCoordinateException exception = assertThrows(
-                    InvalidCoordinateException.class,
+            InvalidAngleException exception = assertThrows(
+                    InvalidAngleException.class,
                     () -> validationService.validateNextPositionRequest(request)
             );
             assertEquals("'angle' must be a valid number", exception.getMessage());
@@ -399,13 +400,12 @@ class ValidationServiceTest {
                     .angle(Double.POSITIVE_INFINITY)
                     .build();
 
-            InvalidCoordinateException exception = assertThrows(
-                    InvalidCoordinateException.class,
+            InvalidAngleException exception = assertThrows(
+                    InvalidAngleException.class,
                     () -> validationService.validateNextPositionRequest(request)
             );
             assertEquals("'angle' must be a valid number", exception.getMessage());
         }
-
         @Test
         @DisplayName("Should accept all valid angles from 0 to 359")
         void shouldAcceptValidAngles() {

@@ -8,12 +8,18 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
-@Service // Marks this class as a Spring service component
+@Service
 public class RestService {
     private static final double CLOSE_DISTANCE = 0.00015;
     private static final double MOVE_LENGTH = 0.00015;
 
 
+    /**
+        * Calculate the Euclidean distance between two geographical positions.
+        * @param position1 The first geographical position.
+        * @param position2 The second geographical position.
+        * @return The Euclidean distance between the two positions.
+     */
     public double calculateDistance(LngLat position1, LngLat position2) {
 
         // using Euclidean distance formula
@@ -22,12 +28,24 @@ public class RestService {
         return Math.sqrt(LongDiff * LongDiff + LatDiff * LatDiff);
     }
 
+    /**
+     * Check if two geographical positions are within a close distance.
+     * @param position1 - The first position.
+     * @param position2 - The second position.
+     * @return - True if the positions are within CLOSE_DISTANCE (0.00015), false otherwise.
+     */
     public boolean isCloseTo(LngLat position1, LngLat position2) {
         double distance = calculateDistance(position1, position2);
         return distance < CLOSE_DISTANCE;
     }
 
 
+    /**
+     * Calculate the next geographical position based on a starting position and an angle.
+     * @param start - The starting geographical position.
+     * @param angle - The angle in degrees.
+     * @return - The new geographical position after moving MOVE_LENGTH (0.00015) in the specified direction.
+     */
     public LngLat nextPosition(LngLat start, double angle) {
         double angleInRadians = Math.toRadians(angle);
 
@@ -45,6 +63,12 @@ public class RestService {
     }
 
 
+    /**
+     * Check if a geographical position is inside a given region (polygon).
+     * @param position - The geographical position to check.
+     * @param region - The region defined by a polygon.
+     * @return - True if the position is inside the region or on its edge, false otherwise.
+     */
     public boolean isInRegion(LngLat position, Region region) {
         var vertices = region.getVertices();
         // logger to log the vertices
@@ -62,6 +86,12 @@ public class RestService {
         return intersectCount % 2 != 0;
     }
 
+    /**
+     * Check if a point is on the edge of a polygon.
+     * @param position - The point to check.
+     * @param vertices - The vertices of the polygon.
+     * @return - True if the point is on the edge of the polygon, false otherwise.
+     */
     private boolean isPointOnPolygonEdge(LngLat position, List<LngLat> vertices) {
         for (int i = 0; i < vertices.size(); i++) {
             LngLat v1 = vertices.get(i);
@@ -74,7 +104,7 @@ public class RestService {
                 // Check if the area of the triangle formed by the point and the edge is zero (collinear)
                 double area = (v1.getLongitude() - position.getLongitude()) * (v2.getLatitude() - position.getLatitude()) -
                         (v2.getLongitude() - position.getLongitude()) * (v1.getLatitude() - position.getLatitude());
-                if (Math.abs(area) < 1e-10) { // Use a small threshold to account for floating-point precision
+                if (Math.abs(area) < 1e-10) { // small threshold to account for floating-point precision
                     return true;
                 }
             }
@@ -82,6 +112,12 @@ public class RestService {
         return false;
     }
 
+    /**
+     * Count the number of times a horizontal ray from the point intersects with the edges of the polygon.
+     * @param position - The point from which the ray is cast.
+     * @param vertices - The vertices of the polygon.
+     * @return - The number of intersections.
+     */
     private static int getIntersectCount(LngLat position, List<LngLat> vertices) {
         int intersectCount = 0;
         for (int i = 0; i < vertices.size(); i++) {

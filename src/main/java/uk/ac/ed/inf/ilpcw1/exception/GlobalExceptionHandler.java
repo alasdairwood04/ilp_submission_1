@@ -109,24 +109,26 @@ public class GlobalExceptionHandler {
      * endpoint is called with an invalid HTTP method (e.g., GET on a POST endpoint).
      *
      * @param ex - the exception
-     * @return - 400 Bad Request as per the coursework specification.
+     * @return - 404 Bad Request as per the coursework specification.
      */
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<Map<String, String>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
         logger.warn("Invalid HTTP method: {}", ex.getMessage());
 
-        Map<String, String> error = new HashMap<>();
-        error.put("error", "Bad Request");
-
-        // Create a helpful error message
         String message = String.format(
                 "HTTP method '%s' is not supported for this endpoint. Supported method(s): %s",
                 ex.getMethod(),
                 String.join(", ", ex.getSupportedMethods())
         );
-        error.put("message", message);
 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        logger.warn(message);
+
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "Bad Request");
+
+        error.put("message", "Invalid method for endpoint");
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
     }
 
     /**
@@ -134,7 +136,7 @@ public class GlobalExceptionHandler {
      * unknown URL.
      *
      * @param ex - the exception
-     * @return - 400 bad request request
+     * @return - 404 bad request request
      */
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<Map<String, String>> handleNoHandlerFound(NoResourceFoundException ex) {
@@ -142,7 +144,7 @@ public class GlobalExceptionHandler {
         Map<String, String> error = new HashMap<>();
         error.put("error", "Bad Request");
         error.put("message", "The requested endpoint does not exist.");
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
     }
 
 

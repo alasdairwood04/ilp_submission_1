@@ -741,4 +741,28 @@ public class RestServiceControllerTest {
             verify(restService, times(0)).isInRegion(any(LngLat.class), any(Region.class));
         }
     }
+
+    @Nested
+    @DisplayName("Invalid URL Tests")
+    class InvalidURLTests {
+        @Test
+        @DisplayName("Test invalid URL returns 404 Not Found")
+        public void testInvalidURL_ReturnsNotFound() throws Exception {
+            mockMvc.perform(post("/api/v1/invalidEndpoint")
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.error").value("Bad Request"))
+                    .andExpect(jsonPath("$.message").value("The requested endpoint does not exist."));
+        }
+
+        @Test
+        @DisplayName("Test invalid HTTP method returns 404 Not Found")
+        public void testInvalidHTTPMethod_ReturnsNotFound() throws Exception {
+            mockMvc.perform(get("/api/v1/distanceTo")
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.error").value("Bad Request"))
+                    .andExpect(jsonPath("$.message").value("Invalid method for endpoint"));
+        }
+    }
 }

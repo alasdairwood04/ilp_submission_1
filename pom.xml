@@ -9,10 +9,10 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>uk.ac.ed.inf</groupId>
-	<artifactId>ilp-cw1</artifactId>
+	<artifactId>ilp_submission_image</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>ilp-cw1</name>
-	<description>ilp-cw1</description>
+	<name>ilp_submission_image</name>
+	<description>ilp_submission_image</description>
 	<url/>
 	<licenses>
 		<license/>

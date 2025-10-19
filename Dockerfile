@@ -19,7 +19,7 @@ FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
 # Copy only the built JAR from builder stage
-COPY --from=builder /app/target/demo-api-0.0.1-SNAPSHOT.jar app.jar
+COPY --from=builder /app/target/ilp_submission_1-0.0.1-SNAPSHOT.jar app.jar
 
 # Expose port
 EXPOSE 8080

@@ -108,7 +108,8 @@ public class GlobalExceptionHandler {
      * Handles HttpRequestMethodNotSupportedException, which occurs when a valid
      * endpoint is called with an invalid HTTP method (e.g., GET on a POST endpoint).
      *
-     * Returns a 400 Bad Request as per the coursework specification.
+     * @param ex - the exception
+     * @return - 400 Bad Request as per the coursework specification.
      */
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<Map<String, String>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
@@ -132,7 +133,8 @@ public class GlobalExceptionHandler {
      * Handles NoHandlerFoundException, which occurs when a request is made to an
      * unknown URL.
      *
-     * Returns a 400 Bad Request as per the coursework specification.
+     * @param ex - the exception
+     * @return - 400 bad request request
      */
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<Map<String, String>> handleNoHandlerFound(NoResourceFoundException ex) {

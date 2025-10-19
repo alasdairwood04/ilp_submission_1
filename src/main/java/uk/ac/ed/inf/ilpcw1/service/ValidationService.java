@@ -27,6 +27,7 @@ public class ValidationService {
     private void validateLngLat(LngLat position, String fieldName) {
         // Check for null fields
         if (position.getLongitude() == null) {
+
             throw new InvalidRequestException(fieldName + ".lng is required");
         }
         if (position.getLatitude() == null) {

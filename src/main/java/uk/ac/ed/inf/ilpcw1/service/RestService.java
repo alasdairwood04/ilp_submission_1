@@ -13,7 +13,6 @@ public class RestService {
     private static final double CLOSE_DISTANCE = 0.00015;
     private static final double MOVE_LENGTH = 0.00015;
 
-
     /**
         * Calculate the Euclidean distance between two geographical positions.
         * @param position1 The first geographical position.

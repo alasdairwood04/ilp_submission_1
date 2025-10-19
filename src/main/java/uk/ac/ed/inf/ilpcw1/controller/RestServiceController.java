@@ -1,10 +1,3 @@
-/**
- * REST controller for handling API requests related to geographical calculations.
- * Handles HTTP requests for distance calculation, proximity checks, next position computation,
- * and region inclusion checks.
- *
- */
-
 package uk.ac.ed.inf.ilpcw1.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;

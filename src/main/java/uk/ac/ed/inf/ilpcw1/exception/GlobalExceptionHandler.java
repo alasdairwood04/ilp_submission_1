@@ -5,12 +5,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import com.fasterxml.jackson.core.JsonProcessingException;
-
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 
 import java.util.HashMap;
@@ -101,6 +103,47 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
+
+    /**
+     * Handles HttpRequestMethodNotSupportedException, which occurs when a valid
+     * endpoint is called with an invalid HTTP method (e.g., GET on a POST endpoint).
+     *
+     * Returns a 400 Bad Request as per the coursework specification.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, String>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        logger.warn("Invalid HTTP method: {}", ex.getMessage());
+
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "Bad Request");
+
+        // Create a helpful error message
+        String message = String.format(
+                "HTTP method '%s' is not supported for this endpoint. Supported method(s): %s",
+                ex.getMethod(),
+                String.join(", ", ex.getSupportedMethods())
+        );
+        error.put("message", message);
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    /**
+     * Handles NoHandlerFoundException, which occurs when a request is made to an
+     * unknown URL.
+     *
+     * Returns a 400 Bad Request as per the coursework specification.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, String>> handleNoHandlerFound(NoResourceFoundException ex) {
+        logger.warn("Invalid endpoint requested");
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "Bad Request");
+        error.put("message", "The requested endpoint does not exist.");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+
     /**
      * Handles all other uncaught exceptions and returns a 500 Internal Server Error.
      * @param ex - the exception
@@ -112,6 +155,4 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body("An unexpected error occurred. Please try again later.");
     }
-
-
 }

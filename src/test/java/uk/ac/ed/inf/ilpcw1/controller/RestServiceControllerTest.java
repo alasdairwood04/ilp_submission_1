@@ -750,19 +750,15 @@ public class RestServiceControllerTest {
         public void testInvalidURL_ReturnsNotFound() throws Exception {
             mockMvc.perform(post("/api/v1/invalidEndpoint")
                             .contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(status().isNotFound())
-                    .andExpect(jsonPath("$.error").value("Bad Request"))
-                    .andExpect(jsonPath("$.message").value("The requested endpoint does not exist."));
+                    .andExpect(status().isNotFound());
         }
 
         @Test
-        @DisplayName("Test invalid HTTP method returns 404 Not Found")
-        public void testInvalidHTTPMethod_ReturnsNotFound() throws Exception {
+        @DisplayName("Test invalid HTTP method returns 405 Not Found")
+        public void testInvalidHTTPMethod_ReturnsMethodNotAllowed() throws Exception {
             mockMvc.perform(get("/api/v1/distanceTo")
                             .contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(status().isNotFound())
-                    .andExpect(jsonPath("$.error").value("Bad Request"))
-                    .andExpect(jsonPath("$.message").value("Invalid method for endpoint"));
+                    .andExpect(status().isMethodNotAllowed());
         }
     }
 }

@@ -97,4 +97,13 @@ public class GlobalExceptionHandler {
         error.put("message", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
+
+    @ExceptionHandler(DroneNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleDroneNotFoundException(DroneNotFoundException ex) {
+        logger.warn("Drone not found: {}", ex.getMessage());
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "Not Found");
+        error.put("message", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
 }

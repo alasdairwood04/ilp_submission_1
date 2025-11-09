@@ -2,14 +2,14 @@ package uk.ac.ed.inf.ilpcw1.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import uk.ac.ed.inf.ilpcw1.data.*;
+import uk.ac.ed.inf.ilpcw1.service.DroneQueryService;
 import uk.ac.ed.inf.ilpcw1.service.RestService;
 import uk.ac.ed.inf.ilpcw1.service.ValidationService;
+
+import java.util.List;
+
 
 @RestController
 @RequestMapping("/api/v1")
@@ -17,12 +17,13 @@ public class RestServiceController {
 
     private final RestService restService;
     private final ValidationService validationService;
+    private final DroneQueryService droneQueryService;
 
     @Autowired
-    public RestServiceController(RestService restService, ValidationService validationService) {
+    public RestServiceController(RestService restService, ValidationService validationService, DroneQueryService droneQueryService) {
         this.restService = restService;
         this.validationService = validationService;
-
+        this.droneQueryService = droneQueryService;
     }
 
     @GetMapping("/uid")
@@ -86,5 +87,30 @@ public class RestServiceController {
 
         boolean insideRegion = restService.isInRegion(request.getPosition(), request.getRegion());
         return ResponseEntity.ok(insideRegion);
+    }
+
+//    ============================= CW2 ENDPOINTS ========================================
+
+    /**
+     * Get drones which support or don't support cooling
+     * @param state true for drones with cooling - false for drones that don't
+     * @return List of drone ID's
+     */
+    @GetMapping("/dronesWithCooling/{state}")
+    public ResponseEntity<List<Integer>> getDronesWithCooling(@PathVariable boolean state) {
+        List<Integer> droneIds = droneQueryService.filterByCooling(state);
+        return ResponseEntity.ok(droneIds);
+    }
+
+    /**
+     * Get details of single specific drone
+     * @param id the DroneID
+     * @return The drone object
+     * @throws uk.ac.ed.inf.ilpcw1.exception.DroneNotFoundException if dront not found (404)
+     */
+    @GetMapping("/droneDetails/{id}")
+    public ResponseEntity<Drone> getDroneDetails(@PathVariable Integer id) {
+        Drone drone = droneQueryService.getByDroneId(id);
+        return ResponseEntity.ok(drone);
     }
 }

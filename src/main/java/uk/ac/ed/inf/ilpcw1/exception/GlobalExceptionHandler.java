@@ -98,6 +98,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
+
+    /**
+     * Handles custom DroneNotFoundException and returns 404 not found
+     * @param ex
+     * @return
+     */
     @ExceptionHandler(DroneNotFoundException.class)
     public ResponseEntity<Map<String, String>> handleDroneNotFoundException(DroneNotFoundException ex) {
         logger.warn("Drone not found: {}", ex.getMessage());

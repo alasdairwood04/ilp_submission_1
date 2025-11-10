@@ -5,11 +5,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import uk.ac.ed.inf.ilpcw1.data.Drone;
+import uk.ac.ed.inf.ilpcw1.data.DroneCapability;
+import uk.ac.ed.inf.ilpcw1.data.DroneQueryRequest;
 import uk.ac.ed.inf.ilpcw1.exception.DroneNotFoundException;
 
+import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
-
 /**
  * Service for querying and filtering drones
  */
@@ -69,5 +72,150 @@ public class DroneQueryService {
             logger.warn("Drone with id={} not found", id);
             return new DroneNotFoundException("Drone with id=" + id + " not found");
         });
+    }
+
+
+    /**
+     * Implements logic for 3b: Query drones by a list of dynamic attributes.
+     *
+     * @param queries The list of query requests from the POST body.
+     * @return A list of matching drone IDs.
+     */
+    public List<Integer> queryDrones(List<DroneQueryRequest> queries) {
+        logger.info("Executing dynamic query with {} criteria", queries.size());
+
+        if (queries == null || queries.isEmpty()) {
+            logger.warn("Empty query attributes list");
+            return List.of();
+        }
+
+
+        // Fetch all drones once
+        List<Drone> allDrones = ilpServiceClient.getAllDrones();
+
+        // Start with a stream of all drones
+        var filteredStream = allDrones.stream();
+
+        // Apply each query as a filter
+        for (DroneQueryRequest query : queries) {
+            filteredStream = filteredStream.filter(drone -> matchesAttribute(drone, query));
+        }
+
+        // Collect the IDs of the filtered drones
+        List<Integer> droneIds = filteredStream
+                .map(Drone::getId)
+                .collect(Collectors.toList());
+
+        logger.info("Found {} drones matching all criteria", droneIds.size());
+        return droneIds;
+    }
+
+    /**
+     * Implements logic for 3a: Query drones by a single path variable attribute.
+     * Uses query endpoint logic - everything is just '='.
+     *
+     * @param attributeName The attribute to check.
+     * @param attributeValue The value to match (operator is always "=").
+     * @return A list of matching drone IDs.
+     */
+    public List<Integer> queryByAttribute(String attributeName, String attributeValue) {
+        logger.info("Executing dynamic path query: {} = {}", attributeName, attributeValue);
+        // Create a single query request, as 3a is just 3b with one "equals" query
+        DroneQueryRequest query = new DroneQueryRequest(attributeName, "=", attributeValue);
+        return queryDrones(List.of(query));
+    }
+
+
+    /**
+     * Helper method to check if a single drone matches a single query.
+     * This performs the reflection, mapping, and comparison.
+     */
+    private boolean matchesAttribute(Drone drone, DroneQueryRequest query) {
+        try {
+            String attribute = query.getAttribute();
+            Object actualValue = getFieldValue(drone, attribute);
+
+            // handle nulls - checks for cooling/heating
+            if (actualValue == null) {
+                if (attribute.equals("cooling") || attribute.equals("heating")) {
+                    actualValue = false; // Treat null/not-present as 'false'
+                } else {
+                    return false; // Other null fields (like 'name') cannot be matched
+                }
+            }
+
+            return compareValues(actualValue, query.getOperator(), query.getValue());
+
+        } catch (Exception e) {
+            logger.warn("Failed to query attribute '{}' on drone {}: {}",
+                    query.getAttribute(), drone.getId(), e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Performs mapping and reflection to get a value from a drone.
+     * It checks fields on Drone first, then on DroneCapability.
+     */
+    private Object getFieldValue(Object object, String attributeName) throws NoSuchFieldException, IllegalAccessException {
+        // Mapping Logic: Try to find the field on the current object first (e.g., Drone)
+        try {
+            Field field = object.getClass().getDeclaredField(attributeName);
+            field.setAccessible(true); // Allow access to private fields
+            return field.get(object);
+        } catch (NoSuchFieldException e) {
+            // Mapping Logic: If not found, check for nested objects.
+            // In our case, the only nested object is "capability".
+            if (object instanceof Drone) {
+                DroneCapability capability = ((Drone) object).getCapability();
+                if (capability != null) {
+                    // Recurse: try to find the field on the Capability object
+                    return getFieldValue(capability, attributeName);
+                }
+            }
+            // If it's not on the Drone or its Capability, the field doesn't exist
+            throw e;
+        }
+    }
+
+    /**
+     * Compares the actual value from the drone with the value from the query.
+     * Handles type casting and operators as per the specification.
+     */
+    private boolean compareValues(Object actualValue, String operator, String queryValue) {
+        // Handle boolean comparison
+        if (actualValue instanceof Boolean) {
+            boolean actual = (Boolean) actualValue;
+            boolean query = Boolean.parseBoolean(queryValue);
+            return actual == query; // Only equals operator is supported
+        }
+
+        // Handle numerical comparison
+        if (actualValue instanceof Number) {
+            double actual = ((Number) actualValue).doubleValue();
+            double query;
+            try {
+                query = Double.parseDouble(queryValue);
+            } catch (NumberFormatException e) {
+                return false; // Cannot compare if query value is not a number
+            }
+
+            return switch (operator) {
+                case "=" -> actual == query;
+                case "!=" -> actual != query;
+                case "<" -> actual < query;
+                case ">" -> actual > query;
+                default -> false; // Invalid operator for numbers
+            };
+        }
+
+        // Handle string comparison
+        if (actualValue instanceof String) {
+            String actual = (String) actualValue;
+            // Only equals operator is supported
+            return Objects.equals(operator, "=") && actual.equals(queryValue);
+        }
+
+        return false;
     }
 }

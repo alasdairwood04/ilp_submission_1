@@ -113,4 +113,32 @@ public class RestServiceController {
         Drone drone = droneQueryService.getByDroneId(id);
         return ResponseEntity.ok(drone);
     }
+
+    /**
+     * [3a] Query drones by a single attribute via GET path variables.
+     * @param attributeName The attribute to check (e.g., "id", "capacity").
+     * @param attributeValue The value to match (e.g., "4", "8").
+     * @return A list of matching drone IDs.
+     */
+    @GetMapping("/queryAsPath/{attribute-name}/{attribute-value}")
+    public ResponseEntity<List<Integer>> queryDronesByPath(
+            @PathVariable("attribute-name") String attributeName,
+            @PathVariable("attribute-value") String attributeValue) {
+
+        List<Integer> droneIds = droneQueryService.queryByAttribute(attributeName, attributeValue);
+        return ResponseEntity.ok(droneIds);
+    }
+
+    /**
+     * [3b] Query drones with a dynamic list of attributes via POST.
+     * @param queries A list of query objects.
+     * @return A list of matching drone IDs.
+     */
+    @PostMapping("/query")
+    public ResponseEntity<List<Integer>> queryDrones(@RequestBody List<DroneQueryRequest> queries) {
+        // Note: The spec doesn't require validation for this request,
+        // so we pass it directly to the service.
+        List<Integer> droneIds = droneQueryService.queryDrones(queries);
+        return ResponseEntity.ok(droneIds);
+    }
 }

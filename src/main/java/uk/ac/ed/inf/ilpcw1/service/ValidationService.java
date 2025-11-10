@@ -6,8 +6,24 @@ import uk.ac.ed.inf.ilpcw1.exception.InvalidCoordinateException;
 import uk.ac.ed.inf.ilpcw1.exception.InvalidRequestException;
 import uk.ac.ed.inf.ilpcw1.exception.InvalidAngleException;
 
+import java.util.List;
+import java.util.Set;
+
+
 @Service
 public class ValidationService {
+
+    // Valid attribute names for drone capabilities
+    private static final Set<String> VALID_CAPABILITIES = Set.of(
+            "cooling", "heating", "capacity", "maxMoves", "max_moves",
+            "costPerMove", "costInitial", "cost_initial",
+            "costFinal"
+    );
+
+    // Valid operators for queries
+    private static final Set<String> NUMERIC_OPERATORS = Set.of("=", "==", "!=", "<", ">", "<=", ">=");
+    private static final Set<String> BOOLEAN_OPERATORS = Set.of("=", "==");
+
 
     /**
      * Validates a LngLat object to ensure its longitude and latitude are valid and within range.
@@ -235,6 +251,36 @@ public class ValidationService {
         if (!firstVertex.equals(lastVertex)) {
             throw new InvalidRequestException("The first and last vertices in 'region.vertices' must be the same to form a closed polygon");
         }
+    }
 
+    // ==================== CW2 STATIC QUERY VALIDATIONS ====================
+
+    /**
+     * Validate drone ID for droneDetails endpoint
+     * @param id The drone ID to validate
+     * @throws InvalidRequestException if ID is null or invalid
+     */
+    public void validateDroneId(Integer id) {
+        if (id == null) {
+            throw new InvalidRequestException("Drone ID cannot be null");
+        }
+
+        // IDs should be positive integers
+        if (id <= 0) {
+            throw new InvalidRequestException("Drone ID must be a positive integer");
+        }
+    }
+
+    /**
+     * Validate dronesWithCooling endpoint parameters
+     * Note: Spring automatically converts path variable to boolean,
+     * but we can add additional validation if needed
+     * @param state The cooling state (true/false)
+     */
+    public void validateCoolingState(Boolean state) {
+        if (state == null) {
+            throw new InvalidRequestException("Cooling state cannot be null");
+        }
+        // Boolean validation is straightforward - Spring handles conversion
     }
 }

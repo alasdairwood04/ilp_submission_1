@@ -98,6 +98,7 @@ public class RestServiceController {
      */
     @GetMapping("/dronesWithCooling/{state}")
     public ResponseEntity<List<Integer>> getDronesWithCooling(@PathVariable boolean state) {
+        validationService.validateCoolingState(state);
         List<Integer> droneIds = droneQueryService.filterByCooling(state);
         return ResponseEntity.ok(droneIds);
     }
@@ -110,6 +111,7 @@ public class RestServiceController {
      */
     @GetMapping("/droneDetails/{id}")
     public ResponseEntity<Drone> getDroneDetails(@PathVariable Integer id) {
+        validationService.validateDroneId(id);
         Drone drone = droneQueryService.getByDroneId(id);
         return ResponseEntity.ok(drone);
     }
@@ -136,8 +138,7 @@ public class RestServiceController {
      */
     @PostMapping("/query")
     public ResponseEntity<List<Integer>> queryDrones(@RequestBody List<DroneQueryRequest> queries) {
-        // Note: The spec doesn't require validation for this request,
-        // so we pass it directly to the service.
+
         List<Integer> droneIds = droneQueryService.queryDrones(queries);
         return ResponseEntity.ok(droneIds);
     }

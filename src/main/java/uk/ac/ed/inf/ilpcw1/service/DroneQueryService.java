@@ -8,6 +8,7 @@ import uk.ac.ed.inf.ilpcw1.data.Drone;
 import uk.ac.ed.inf.ilpcw1.data.DroneCapability;
 import uk.ac.ed.inf.ilpcw1.data.DroneQueryRequest;
 import uk.ac.ed.inf.ilpcw1.exception.DroneNotFoundException;
+import uk.ac.ed.inf.ilpcw1.exception.InvalidRequestException;
 
 import java.lang.reflect.Field;
 import java.util.List;
@@ -82,13 +83,12 @@ public class DroneQueryService {
      * @return A list of matching drone IDs.
      */
     public List<Integer> queryDrones(List<DroneQueryRequest> queries) {
-        logger.info("Executing dynamic query with {} criteria", queries.size());
-
         if (queries == null || queries.isEmpty()) {
             logger.warn("Empty query attributes list");
             return List.of();
         }
 
+        logger.info("Executing dynamic query with {} criteria", queries.size());
 
         // Fetch all drones once
         List<Drone> allDrones = ilpServiceClient.getAllDrones();
@@ -157,8 +157,7 @@ public class DroneQueryService {
      * Performs mapping and reflection to get a value from a drone.
      * It checks fields on Drone first, then on DroneCapability.
      */
-    private Object getFieldValue(Object object, String attributeName) throws NoSuchFieldException, IllegalAccessException {
-        // Mapping Logic: Try to find the field on the current object first (e.g., Drone)
+    private Object getFieldValue(Object object, String attributeName) throws IllegalAccessException, InvalidRequestException {
         try {
             Field field = object.getClass().getDeclaredField(attributeName);
             field.setAccessible(true); // Allow access to private fields
@@ -173,8 +172,8 @@ public class DroneQueryService {
                     return getFieldValue(capability, attributeName);
                 }
             }
-            // If it's not on the Drone or its Capability, the field doesn't exist
-            throw e;
+            // If it's not on the Drone or its Capability, throw InvalidRequestException
+            throw new InvalidRequestException("Unknown attribute: " + attributeName);
         }
     }
 

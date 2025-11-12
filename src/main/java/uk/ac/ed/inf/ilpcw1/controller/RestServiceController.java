@@ -117,7 +117,7 @@ public class RestServiceController {
     }
 
     /**
-     * [3a] Query drones by a single attribute via GET path variables.
+     * 3 Query drones by a single attribute via GET path variables.
      * @param attributeName The attribute to check (e.g., "id", "capacity").
      * @param attributeValue The value to match (e.g., "4", "8").
      * @return A list of matching drone IDs.
@@ -132,7 +132,7 @@ public class RestServiceController {
     }
 
     /**
-     * [3b] Query drones with a dynamic list of attributes via POST.
+     * 4 Query drones with a dynamic list of attributes via POST.
      * @param queries A list of query objects.
      * @return A list of matching drone IDs.
      */
@@ -141,5 +141,13 @@ public class RestServiceController {
 
         List<Integer> droneIds = droneQueryService.queryDrones(queries);
         return ResponseEntity.ok(droneIds);
+    }
+
+    @PostMapping("/queryAvailableDrones")
+    public ResponseEntity<List<Integer>> queryAvailableDrones(@RequestBody List<MedDispatchRec> medDispatchRec) {
+        // Validate the entire request
+
+        List<Integer> availableDroneIds = droneQueryService.queryAvailableDrones(medDispatchRec);
+        return ResponseEntity.ok(availableDroneIds);
     }
 }

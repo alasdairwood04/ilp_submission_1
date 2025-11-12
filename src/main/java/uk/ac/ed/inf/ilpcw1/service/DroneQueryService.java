@@ -4,15 +4,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import uk.ac.ed.inf.ilpcw1.data.Drone;
-import uk.ac.ed.inf.ilpcw1.data.DroneCapability;
-import uk.ac.ed.inf.ilpcw1.data.DroneQueryRequest;
+import uk.ac.ed.inf.ilpcw1.data.*;
 import uk.ac.ed.inf.ilpcw1.exception.DroneNotFoundException;
 import uk.ac.ed.inf.ilpcw1.exception.InvalidRequestException;
 
 import java.lang.reflect.Field;
-import java.util.List;
-import java.util.Objects;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.*;
 import java.util.stream.Collectors;
 /**
  * Service for querying and filtering drones
@@ -217,4 +216,137 @@ public class DroneQueryService {
 
         return false;
     }
+
+    /**
+     * 4 Drone availability query
+     *  @param
+     */
+
+    public List<Integer> queryAvailableDrones(List<MedDispatchRec> dispatches) {
+        if (dispatches == null) {
+            logger.warn("Dispatch record is null");
+            return List.of();
+        }
+
+        // check that date and time are of type LocalDate and LocalTime
+        for (MedDispatchRec record : dispatches) {
+            if (record.getDate() == null || record.getTime() == null) {
+                logger.warn("Dispatch record with id={} has null date or time", record.getId());
+                return List.of();
+            }
+        }
+
+        logger.info("the list of dispatches are: {}", dispatches);
+        logger.info("The list of requirements are: {}", dispatches.stream()
+                .map(MedDispatchRec::getRequirements)
+                .collect(Collectors.toList()));
+
+        // helper function that returns requirements which is the aggregated required capabilities
+        Requirements aggregateRequirements = aggregateRequirements(dispatches);
+
+
+        logger.info("Aggregated requirements: {}", aggregateRequirements);
+
+        // fetch all drones
+        List<Drone> allDrones = ilpServiceClient.getAllDrones();
+        List<DroneServicePointRequest> dronesForServicePoints = ilpServiceClient.getDroneAvailability();
+
+        Map<Integer, List<DroneAvailabilityDetails>> availabilityMap = buildAvailabilityMap(dronesForServicePoints);
+
+        logger.info("Built availability map for {} drones", availabilityMap.size());
+        logger.info("Availability map sample: {}", availabilityMap.entrySet().stream().limit(5).toList());
+
+
+
+        logger.info("Querying available drones for {} dispatch records", dispatches.size());
+        //logger.info("Required capabilities: {}", requiredCapabilities);
+
+
+        return List.of(); // placeholder
+    }
+
+    // create lookup map for droneID, availability details
+    private Map<Integer, List<DroneAvailabilityDetails>> buildAvailabilityMap(List<DroneServicePointRequest> allAvailabilityData) {
+        Map<Integer, List<DroneAvailabilityDetails>> availabilityMap = new HashMap<>();
+        for (DroneServicePointRequest servicePoint : allAvailabilityData) {
+            for (DroneAvailabilityRequest drone : servicePoint.getDrones()) {
+                availabilityMap.put(drone.getId(), drone.getAvailable());
+            }
+        }
+        return availabilityMap;
+    }
+
+    private Requirements aggregateRequirements(List<MedDispatchRec> dispatches) {
+        Requirements aggregated = new Requirements();
+
+        double capacitySum = 0.0;
+        boolean hasCapacity = false;
+
+        double maxCostSum = 0.0;
+        boolean hasMaxCost = false;
+
+        boolean coolingRequired = false;
+        boolean heatingRequired = false;
+
+        if (dispatches == null || dispatches.isEmpty()) {
+            // ensure booleans are explicit false
+            aggregated.setCooling(false);
+            aggregated.setHeating(false);
+            return aggregated;
+        }
+
+        for (MedDispatchRec record : dispatches) {
+            if (record == null) continue;
+            Requirements req = record.getRequirements();
+            if (req == null) continue;
+
+            // Aggregate capacity (sum when present)
+            if (req.getCapacity() != null) {
+                capacitySum += req.getCapacity();
+                hasCapacity = true;
+            }
+
+            // Aggregate maxCost (sum when present)
+            if (req.getMaxCost() != null) {
+                maxCostSum += req.getMaxCost();
+                hasMaxCost = true;
+            }
+
+            // Aggregate cooling / heating (treat null as false)
+            if (Boolean.TRUE.equals(req.getCooling())) {
+                coolingRequired = true;
+            }
+            if (Boolean.TRUE.equals(req.getHeating())) {
+                heatingRequired = true;
+            }
+        }
+
+        if (hasCapacity) {
+            aggregated.setCapacity(capacitySum);
+        } else {
+            aggregated.setCapacity(null);
+        }
+
+        if (hasMaxCost) {
+            aggregated.setMaxCost(maxCostSum);
+        } else {
+            aggregated.setMaxCost(null);
+        }
+
+        aggregated.setCooling(coolingRequired);
+        aggregated.setHeating(heatingRequired);
+
+        return aggregated;
+    }
+
+    // checkAvailability
+
+
+
+    private boolean checkCapabilities(Drone drone, Requirements requirements) {
+        // make sure to reference the query method
+        return true; // placeholder
+    }
+
+    // checkCost
 }

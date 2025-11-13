@@ -219,11 +219,10 @@ public class DroneQueryService {
     }
 
     /**
-     * 4 Drone availability query
-     *  @param dispatches - list of medical dispatch records
-     * @return list of IDs of drones that can fulfill all dispatches in one trip
+     * Implements logic for 4: Query available drones for a list of dispatch records.
+     * @param dispatches List of dispatch records
+     * @return List of available drone IDs
      */
-
     public List<Integer> queryAvailableDrones(List<MedDispatchRec> dispatches) {
         if (dispatches == null) {
             logger.warn("Dispatch record is null");
@@ -271,10 +270,10 @@ public class DroneQueryService {
 
     /**
      * Helper method to check if a drone can serve all dispatches
-     * @param drone
-     * @param dispatches
-     * @param aggregatedRequirements
-     * @param availabilityMap
+     * @param drone used to compare its capabilities
+     * @param dispatches list of dispatch records
+     * @param aggregatedRequirements the aggregated requirements from all dispatches
+     * @param availabilityMap map of drone availability details
      * @return true if drone can serve all dispatches, false otherwise
      */
     private boolean canDroneServeAllDispatches(Drone drone, List<MedDispatchRec> dispatches,
@@ -303,8 +302,8 @@ public class DroneQueryService {
 
     /**
      * Helper method to check if a drone meets the aggregated requirements
-     * @param drone
-     * @param requirements
+     * @param drone to check
+     * @param requirements aggregated requirements
      * @return true if drone meets requirements, false otherwise
      */
     private boolean checkCapabilities(Drone drone, Requirements requirements) {
@@ -347,9 +346,9 @@ public class DroneQueryService {
 
     /**
      * Helper method to check if a drone is available for a specific dispatch
-     * @param droneId
-     * @param dispatch
-     * @param availabilityMap
+     * @param droneId id of the drone
+     * @param dispatch dispatch record
+     * @param availabilityMap map of drone availability details
      * @return true if drone is available for the dispatch, false otherwise
      */
     private boolean isDroneAvailableForDispatch(Integer droneId, MedDispatchRec dispatch,
@@ -388,7 +387,7 @@ public class DroneQueryService {
 
     /**
      * Helper method to build a map of drone availability
-     * @param allAvailabilityData
+     * @param allAvailabilityData list of drone availability data from service points
      * @return map of drone ID to list of availability details
      */
     private Map<Integer, List<DroneAvailabilityDetails>> buildAvailabilityMap(List<DroneServicePointRequest> allAvailabilityData) {

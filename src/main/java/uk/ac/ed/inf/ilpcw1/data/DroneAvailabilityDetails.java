@@ -6,6 +6,8 @@ import lombok.Data;
 import lombok.Builder;
 import lombok.NoArgsConstructor;
 
+import java.time.DayOfWeek;
+import java.time.LocalTime;
 import java.util.List;
 
 /**
@@ -18,11 +20,11 @@ import java.util.List;
 @Builder
 public class DroneAvailabilityDetails {
     @JsonProperty("dayOfWeek")
-    private String dayOfWeek;
+    private DayOfWeek dayOfWeek;
 
     @JsonProperty("from")
-    private String from;
+    private LocalTime from;
 
     @JsonProperty("until")
-    private String until;
+    private LocalTime until;
 }

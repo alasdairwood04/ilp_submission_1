@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import uk.ac.ed.inf.ilpcw1.data.Drone;
 import uk.ac.ed.inf.ilpcw1.data.DroneServicePointRequest;
+import uk.ac.ed.inf.ilpcw1.data.RestrictedArea;
+import uk.ac.ed.inf.ilpcw1.data.ServicePoints;
 
 import java.util.Arrays;
 import java.util.List;
@@ -73,6 +75,44 @@ public class ILPServiceClient {
         } catch (Exception e) {
             logger.error("Error fetching drone availability from ILP service", e);
             throw new RuntimeException("Failed to fetch drone availability from ILP service", e);
+        }
+    }
+
+    public List<ServicePoints> getServicePoints() {
+        try {
+            String url = ilpEndpoint + "service-points";
+            logger.info("Fetching service points from: {}", url);
+
+            ServicePoints[] servicePoints = restTemplate.getForObject(url, ServicePoints[].class);
+
+            if (servicePoints == null) {
+                logger.warn("No service points returned from ILP service");
+                return List.of();
+            }
+            logger.info("Successfully fetched {} service points", servicePoints.length);
+            return Arrays.asList(servicePoints);
+        } catch (Exception e) {
+            logger.error("Error fetching service points from ILP service", e);
+            throw new RuntimeException("Failed to fetch service points from ILP service", e);
+        }
+    }
+
+    public List<RestrictedArea> getRestrictedAreas() {
+        try {
+            String url = ilpEndpoint + "restricted-areas";
+            logger.info("Fetching restricted areas from: {}", url);
+
+            RestrictedArea[] restrictedAreas = restTemplate.getForObject(url, RestrictedArea[].class);
+
+            if (restrictedAreas == null) {
+                logger.warn("No restricted areas returned from ILP service");
+                return List.of();
+            }
+            logger.info("Successfully fetched {} restricted areas", restrictedAreas.length);
+            return Arrays.asList(restrictedAreas);
+        } catch (Exception e) {
+            logger.error("Error fetching restricted areas from ILP service", e);
+            throw new RuntimeException("Failed to fetch restricted areas from ILP service", e);
         }
     }
 }

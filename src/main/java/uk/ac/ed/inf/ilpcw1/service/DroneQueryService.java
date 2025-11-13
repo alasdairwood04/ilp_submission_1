@@ -467,4 +467,39 @@ public class DroneQueryService {
 
         return aggregated;
     }
+
+
+    public Boolean calcDeliveryPath(List<MedDispatchRec> dispatches) {
+        // Placeholder implementation
+        logger.info("Calculating delivery path for {} dispatch records", dispatches.size());
+
+        // fetch all drones
+        List<Drone> allDrones = ilpServiceClient.getAllDrones();
+        logger.info("Fetched {} drones", allDrones.size());
+
+        List<DroneServicePointRequest> dronesForServicePoints = ilpServiceClient.getDroneAvailability();
+        logger.info("Fetched drone availability for {} service points", dronesForServicePoints.size());
+
+        // fetch service points locations
+        List<ServicePoints> servicePoints = ilpServiceClient.getServicePoints();
+        logger.info("Fetched {} service points", servicePoints.size());
+
+        // fetch restricted areas
+        List<RestrictedArea> restrictedAreas = ilpServiceClient.getRestrictedAreas();
+        logger.info("Fetched {} restricted areas", restrictedAreas.size());
+
+        // filter for available drones based on dispatch requirements and availability
+        List<Integer> availableDrones = queryAvailableDrones(dispatches);
+        logger.info("Available drones: {}", availableDrones);
+
+        // pick nearest service point drone
+
+        // calculate path
+
+        // add duplicated hover coordinate at delivery
+
+        // compute total cost and return full JSON of path details
+
+        return true;
+    }
 }

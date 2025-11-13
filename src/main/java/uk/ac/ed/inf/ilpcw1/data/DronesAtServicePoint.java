@@ -16,7 +16,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class DroneAvailabilityRequest {
+public class DronesAtServicePoint {
     @JsonProperty("id")
     private Integer id;
 

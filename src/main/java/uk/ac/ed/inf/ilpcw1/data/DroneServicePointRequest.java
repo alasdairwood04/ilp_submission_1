@@ -22,6 +22,6 @@ public class DroneServicePointRequest {
     private Integer servicePointId;
 
     @JsonProperty("drones")
-    private List<DroneAvailabilityRequest> drones;
+    private List<DronesAtServicePoint> drones;
 
 }

@@ -150,4 +150,11 @@ public class RestServiceController {
         List<Integer> availableDroneIds = droneQueryService.queryAvailableDrones(medDispatchRec);
         return ResponseEntity.ok(availableDroneIds);
     }
+
+    @PostMapping("/calcDeliveryPath")
+    public ResponseEntity<DeliveryPathResponse> calculateDeliveryPath(@RequestBody List<MedDispatchRec> medDispatchRec) {
+
+        DeliveryPathResponse response = droneQueryService.calculateDeliveryPath(request);
+        return ResponseEntity.ok(response);
+    }
 }

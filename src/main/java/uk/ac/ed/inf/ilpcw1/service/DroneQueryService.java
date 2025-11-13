@@ -9,6 +9,7 @@ import uk.ac.ed.inf.ilpcw1.exception.DroneNotFoundException;
 import uk.ac.ed.inf.ilpcw1.exception.InvalidRequestException;
 
 import java.lang.reflect.Field;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.*;
@@ -236,40 +237,138 @@ public class DroneQueryService {
             }
         }
 
-        logger.info("the list of dispatches are: {}", dispatches);
-        logger.info("The list of requirements are: {}", dispatches.stream()
-                .map(MedDispatchRec::getRequirements)
-                .collect(Collectors.toList()));
+
+        logger.info("Querying available drones for {} dispatch records", dispatches.size());
 
         // helper function that returns requirements which is the aggregated required capabilities
         Requirements aggregateRequirements = aggregateRequirements(dispatches);
-
-
         logger.info("Aggregated requirements: {}", aggregateRequirements);
 
-        // fetch all drones
+        // fetch all drones and availability data
         List<Drone> allDrones = ilpServiceClient.getAllDrones();
         List<DroneServicePointRequest> dronesForServicePoints = ilpServiceClient.getDroneAvailability();
 
+        // build availability map <droneID, availabilityDetails>
         Map<Integer, List<DroneAvailabilityDetails>> availabilityMap = buildAvailabilityMap(dronesForServicePoints);
 
         logger.info("Built availability map for {} drones", availabilityMap.size());
-        logger.info("Availability map sample: {}", availabilityMap.entrySet().stream().limit(5).toList());
-
-
 
         logger.info("Querying available drones for {} dispatch records", dispatches.size());
-        //logger.info("Required capabilities: {}", requiredCapabilities);
 
+        // filter drones based on availability and capabilities
+        List<Integer> availableDrones = new ArrayList<>();
 
-        return List.of(); // placeholder
+        for (Drone drone : allDrones) {
+            if (canDroneServeAllDispatches(drone, dispatches, aggregateRequirements, availabilityMap)) {
+                availableDrones.add(drone.getId());
+            }
+        }
+
+        logger.info("Found {} available drones matching all dispatch requirements", availableDrones.size());
+        return availableDrones;
+    }
+
+    private boolean canDroneServeAllDispatches(Drone drone, List<MedDispatchRec> dispatches,
+                                               Requirements aggregatedRequirements,
+                                               Map<Integer, List<DroneAvailabilityDetails>> availabilityMap) {
+
+        // check aggregate capabilities (capacity, cooling, heating)
+        if (!checkCapabilities(drone, aggregatedRequirements)) {
+            logger.debug("Drone id={} failed capability check", drone.getId());
+            return false;
+        }
+
+        // check availability for each dispatch date/time
+        // drone must be available for all dispatches
+        for (MedDispatchRec dispatch : dispatches) {
+            if (!isDroneAvailableForDispatch(drone.getId(), dispatch, availabilityMap)) {
+                logger.debug("Drone {} not available for dispatch {} on {} at {}",
+                        drone.getId(), dispatch.getId(), dispatch.getDate(), dispatch.getTime());
+                return false;
+            }
+        }
+
+        // max cost constraint - will look at later
+        return true;
+    }
+
+    private boolean checkCapabilities(Drone drone, Requirements requirements) {
+        DroneCapability capability = drone.getCapability();
+        if (capability == null) {
+            logger.debug("Drone id={} has no capability data", drone.getId());
+            return false;
+        }
+
+        // check capacity
+        if (requirements.getCapacity() != null) {
+            if (capability.getCapacity() == null ||
+            capability.getCapacity() < requirements.getCapacity()) {
+                logger.debug("Drone id={} failed capacity check: required={}, available={}",
+                        drone.getId(), requirements.getCapacity(), capability.getCapacity());
+                return false;
+            }
+        }
+
+        // check cooling
+        if (Boolean.TRUE.equals(requirements.getCooling())) {
+            if (!Boolean.TRUE.equals(capability.getCooling())) {
+                logger.debug("Drone id={} failed cooling check: required=true, available={}",
+                        drone.getId(), capability.getCooling());
+                return false;
+            }
+        }
+
+        // check heating
+        if (Boolean.TRUE.equals(requirements.getHeating())) {
+            if (!Boolean.TRUE.equals(capability.getHeating())) {
+                logger.debug("Drone id={} failed heating check: required=true, available={}",
+                        drone.getId(), capability.getHeating());
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean isDroneAvailableForDispatch(Integer droneId, MedDispatchRec dispatch,
+                                                Map<Integer, List<DroneAvailabilityDetails>> availabilityMap) {
+
+        // get availability details for drone
+        List<DroneAvailabilityDetails> availabilityDetails = availabilityMap.get(droneId);
+
+        // check if drone is available for the dispatch date and time
+        if (availabilityDetails == null || availabilityDetails.isEmpty()) {
+            logger.debug("No availability data for drone id={}", droneId);
+            return false;
+        }
+
+        // get dispatch date and time
+        DayOfWeek dayOfWeek = dispatch.getDate().getDayOfWeek();
+        LocalTime dispatchTime = dispatch.getTime();
+
+        for (DroneAvailabilityDetails slot : availabilityDetails) {
+            // check if the day matches
+            if (slot.getDayOfWeek().equals(dayOfWeek)) {
+                logger.debug("Checking availability for drone id={} on {} at {}",
+                        droneId, dispatch.getDate(), dispatch.getTime());
+                // check if the time falls within the available slot
+                if (!dispatchTime.isBefore(slot.getFrom()) && !dispatchTime.isAfter(slot.getUntil())) {
+                    logger.debug("Drone id={} is available for dispatch id={} on {} at {}",
+                            droneId, dispatch.getId(), dispatch.getDate(), dispatch.getTime());
+                    return true; // drone is available for this dispatch
+                }
+            }
+        }
+        logger.debug("Drone id={} is NOT available for dispatch id={} on {} at {}",
+                droneId, dispatch.getId(), dispatch.getDate(), dispatch.getTime());
+        return false; // drone is not available for this dispatch
     }
 
     // create lookup map for droneID, availability details
     private Map<Integer, List<DroneAvailabilityDetails>> buildAvailabilityMap(List<DroneServicePointRequest> allAvailabilityData) {
         Map<Integer, List<DroneAvailabilityDetails>> availabilityMap = new HashMap<>();
         for (DroneServicePointRequest servicePoint : allAvailabilityData) {
-            for (DroneAvailabilityRequest drone : servicePoint.getDrones()) {
+            for (DronesAtServicePoint drone : servicePoint.getDrones()) {
                 availabilityMap.put(drone.getId(), drone.getAvailable());
             }
         }
@@ -338,15 +437,4 @@ public class DroneQueryService {
 
         return aggregated;
     }
-
-    // checkAvailability
-
-
-
-    private boolean checkCapabilities(Drone drone, Requirements requirements) {
-        // make sure to reference the query method
-        return true; // placeholder
-    }
-
-    // checkCost
 }

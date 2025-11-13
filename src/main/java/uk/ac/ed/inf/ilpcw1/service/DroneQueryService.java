@@ -220,7 +220,8 @@ public class DroneQueryService {
 
     /**
      * 4 Drone availability query
-     *  @param
+     *  @param dispatches - list of medical dispatch records
+     * @return list of IDs of drones that can fulfill all dispatches in one trip
      */
 
     public List<Integer> queryAvailableDrones(List<MedDispatchRec> dispatches) {
@@ -236,7 +237,6 @@ public class DroneQueryService {
                 return List.of();
             }
         }
-
 
         logger.info("Querying available drones for {} dispatch records", dispatches.size());
 
@@ -268,6 +268,15 @@ public class DroneQueryService {
         return availableDrones;
     }
 
+
+    /**
+     * Helper method to check if a drone can serve all dispatches
+     * @param drone
+     * @param dispatches
+     * @param aggregatedRequirements
+     * @param availabilityMap
+     * @return true if drone can serve all dispatches, false otherwise
+     */
     private boolean canDroneServeAllDispatches(Drone drone, List<MedDispatchRec> dispatches,
                                                Requirements aggregatedRequirements,
                                                Map<Integer, List<DroneAvailabilityDetails>> availabilityMap) {
@@ -292,6 +301,12 @@ public class DroneQueryService {
         return true;
     }
 
+    /**
+     * Helper method to check if a drone meets the aggregated requirements
+     * @param drone
+     * @param requirements
+     * @return true if drone meets requirements, false otherwise
+     */
     private boolean checkCapabilities(Drone drone, Requirements requirements) {
         DroneCapability capability = drone.getCapability();
         if (capability == null) {
@@ -330,6 +345,13 @@ public class DroneQueryService {
         return true;
     }
 
+    /**
+     * Helper method to check if a drone is available for a specific dispatch
+     * @param droneId
+     * @param dispatch
+     * @param availabilityMap
+     * @return true if drone is available for the dispatch, false otherwise
+     */
     private boolean isDroneAvailableForDispatch(Integer droneId, MedDispatchRec dispatch,
                                                 Map<Integer, List<DroneAvailabilityDetails>> availabilityMap) {
 
@@ -364,7 +386,11 @@ public class DroneQueryService {
         return false; // drone is not available for this dispatch
     }
 
-    // create lookup map for droneID, availability details
+    /**
+     * Helper method to build a map of drone availability
+     * @param allAvailabilityData
+     * @return map of drone ID to list of availability details
+     */
     private Map<Integer, List<DroneAvailabilityDetails>> buildAvailabilityMap(List<DroneServicePointRequest> allAvailabilityData) {
         Map<Integer, List<DroneAvailabilityDetails>> availabilityMap = new HashMap<>();
         for (DroneServicePointRequest servicePoint : allAvailabilityData) {
@@ -375,6 +401,11 @@ public class DroneQueryService {
         return availabilityMap;
     }
 
+    /**
+     * Helper method to aggregate requirements from multiple dispatch records
+     * @param dispatches
+     * @return aggregated requirements
+     */
     private Requirements aggregateRequirements(List<MedDispatchRec> dispatches) {
         Requirements aggregated = new Requirements();
 

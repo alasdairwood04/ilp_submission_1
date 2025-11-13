@@ -469,7 +469,7 @@ public class DroneQueryService {
     }
 
 
-    public Boolean calcDeliveryPath(List<MedDispatchRec> dispatches) {
+    public DeliveryPathResponse calcDeliveryPath(List<MedDispatchRec> dispatches) {
         // Placeholder implementation
         logger.info("Calculating delivery path for {} dispatch records", dispatches.size());
 
@@ -477,6 +477,7 @@ public class DroneQueryService {
         List<Drone> allDrones = ilpServiceClient.getAllDrones();
         logger.info("Fetched {} drones", allDrones.size());
 
+        // fetch drone availability
         List<DroneServicePointRequest> dronesForServicePoints = ilpServiceClient.getDroneAvailability();
         logger.info("Fetched drone availability for {} service points", dronesForServicePoints.size());
 
@@ -500,6 +501,6 @@ public class DroneQueryService {
 
         // compute total cost and return full JSON of path details
 
-        return true;
+        return new DeliveryPathResponse(); // Placeholder
     }
 }

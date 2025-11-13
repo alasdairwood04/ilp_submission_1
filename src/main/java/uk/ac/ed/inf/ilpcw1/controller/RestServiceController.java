@@ -131,10 +131,11 @@ public class RestServiceController {
         return ResponseEntity.ok(droneIds);
     }
 
+
     /**
-     * 4 Query drones with a dynamic list of attributes via POST.
-     * @param queries A list of query objects.
-     * @return A list of matching drone IDs.
+     * 4 Query drones by multiple attributes via POST request body.
+     * @param queries - The list of query requests containing attribute names and values.
+     * @return - A list of matching drone IDs.
      */
     @PostMapping("/query")
     public ResponseEntity<List<Integer>> queryDrones(@RequestBody List<DroneQueryRequest> queries) {
@@ -143,18 +144,27 @@ public class RestServiceController {
         return ResponseEntity.ok(droneIds);
     }
 
+    /**
+     * 4 Query available drones for a list of medical dispatch records.
+     * @param medDispatchRec - The list of medical dispatch records.
+     * @return - The list of available drone IDs.
+     */
     @PostMapping("/queryAvailableDrones")
     public ResponseEntity<List<Integer>> queryAvailableDrones(@RequestBody List<MedDispatchRec> medDispatchRec) {
-        // Validate the entire request
 
         List<Integer> availableDroneIds = droneQueryService.queryAvailableDrones(medDispatchRec);
         return ResponseEntity.ok(availableDroneIds);
     }
 
+    /**
+     * 5 Calculate delivery paths for a list of medical dispatch records.
+     * @param medDispatchRecs - The list of medical dispatch records.
+     * @return - The delivery path response containing total cost, total moves, and drone paths.
+     */
     @PostMapping("/calcDeliveryPath")
-    public ResponseEntity<DeliveryPathResponse> calculateDeliveryPath(@RequestBody List<MedDispatchRec> medDispatchRec) {
+    public ResponseEntity<DeliveryPathResponse> calculateDeliveryPath(@RequestBody List<MedDispatchRec> medDispatchRecs) {
 
-        DeliveryPathResponse response = droneQueryService.calculateDeliveryPath(request);
+        DeliveryPathResponse response = droneQueryService.calcDeliveryPath(medDispatchRecs);
         return ResponseEntity.ok(response);
     }
 }

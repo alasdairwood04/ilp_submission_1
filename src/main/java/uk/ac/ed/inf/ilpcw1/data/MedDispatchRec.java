@@ -29,4 +29,7 @@ public class MedDispatchRec {
 
     @JsonProperty("requirements")
     private Requirements requirements;
+
+    @JsonProperty("delivery")
+    private LngLat delivery;
 }

@@ -32,12 +32,15 @@ public class DroneQueryServiceTest {
     @Mock
     private ILPServiceClient ilpServiceClientMock;
 
+    @Mock
+    private RestService restServiceMock;
+
     private DroneQueryService droneQueryService;
 
 
     @BeforeEach
     public void setUp() {
-        droneQueryService = new DroneQueryService(ilpServiceClientMock);
+        droneQueryService = new DroneQueryService(ilpServiceClientMock, restServiceMock);
     }
 
     private List<Drone> createMockDrones() {

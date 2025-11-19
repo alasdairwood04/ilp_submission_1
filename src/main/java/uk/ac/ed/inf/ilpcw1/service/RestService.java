@@ -75,7 +75,6 @@ public class RestService {
         var vertices = region.getVertices();
         // logger to log the vertices
         Logger logger = LoggerFactory.getLogger(RestService.class);
-        logger.info("Region vertices: " + vertices);
 
         // Check if the point is on any of the polygon's edges
         boolean onEdge = isPointOnPolygonEdge(position, vertices);

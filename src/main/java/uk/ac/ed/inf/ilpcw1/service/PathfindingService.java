@@ -77,7 +77,7 @@ public class PathfindingService {
         allNodes.put(positionKey(start), startNode);
 
         int iterations = 0;
-        final int MAX_ITERATIONS = 1000; // Prevent infinite loops
+        final int MAX_ITERATIONS = 50000; // Prevent infinite loops
 
         List<Region> noFlyZones = restrictedAreas.stream()
                 .map(this::convertToRegion)

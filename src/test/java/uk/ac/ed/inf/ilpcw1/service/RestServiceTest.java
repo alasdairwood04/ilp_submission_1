@@ -355,6 +355,21 @@ public class RestServiceTest {
             assertTrue(restService.isCloseTo(pointA, pointB),
                     "Points with combined distance below threshold should be considered close");
         }
+        @Test
+        @DisplayName("test for actual distance")
+        void testIsCloseTo_ActualDistance() {
+            LngLat pointA = LngLat.builder()
+                    .longitude(-3.28635807889864)
+                    .latitude(55.9446806670849)
+                    .build();
+            LngLat pointB = LngLat.builder()
+                    .longitude(-3.2862580788986997)
+                    .latitude(55.94468066708487)
+                    .build();
+
+            assertTrue(restService.isCloseTo(pointA, pointB),
+                    "Points with actual distance below threshold should be considered close");
+        }
     }
 
     @Nested

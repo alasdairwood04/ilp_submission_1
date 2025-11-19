@@ -18,7 +18,7 @@ import java.util.List;
 @Builder
 public class DronePathDetails {
     @JsonProperty("droneId")
-    private Integer droneId;
+    private String droneId;
 
     @JsonProperty("deliveries")
     private List<Deliveries> deliveries;

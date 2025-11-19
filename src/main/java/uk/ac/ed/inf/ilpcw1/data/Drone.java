@@ -18,7 +18,7 @@ import uk.ac.ed.inf.ilpcw1.data.DroneCapability;
 @Builder
 public class Drone {
     @JsonProperty("id")
-    private Integer id;
+    private String id;
 
     @JsonProperty("name")
     private String name;

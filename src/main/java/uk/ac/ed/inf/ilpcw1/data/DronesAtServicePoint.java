@@ -18,7 +18,7 @@ import java.util.List;
 @Builder
 public class DronesAtServicePoint {
     @JsonProperty("id")
-    private Integer id;
+    private String id;
 
     @JsonProperty("availability")
     private List<DroneAvailabilityDetails> available;

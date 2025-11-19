@@ -260,14 +260,9 @@ public class ValidationService {
      * @param id The drone ID to validate
      * @throws InvalidRequestException if ID is null or invalid
      */
-    public void validateDroneId(Integer id) {
+    public void validateDroneId(String id) {
         if (id == null) {
             throw new InvalidRequestException("Drone ID cannot be null");
-        }
-
-        // IDs should be positive integers
-        if (id <= 0) {
-            throw new InvalidRequestException("Drone ID must be a positive integer");
         }
     }
 

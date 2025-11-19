@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
+
 /**
  * Service for querying and filtering drones
  */
@@ -39,12 +40,12 @@ public class DroneQueryService {
      * @param hasCooling true to get drones with cooling, false for drones without
      * @return List of drones IDs matching criteria - either having or not having cooling
      */
-    public List<Integer> filterByCooling(boolean hasCooling) {
+    public List<String> filterByCooling(boolean hasCooling) {
         logger.info("Filtering drones with cooling={}", hasCooling);
 
         List<Drone> allDrones = ilpServiceClient.getAllDrones();
 
-        List<Integer> droneIds = allDrones.stream()
+        List<String> droneIds = allDrones.stream()
                 .filter(drone -> drone.getCapability() != null)
                 .filter(drone -> {
                     Boolean cooling = drone.getCapability().getCooling();
@@ -66,7 +67,7 @@ public class DroneQueryService {
      * @return The Drone object
      * @throws DroneNotFoundException if Drone is not found
      */
-    public Drone getByDroneId(Integer id) {
+    public Drone getByDroneId(String id) {
         logger.info("Fetching drone with id={}", id);
 
         List<Drone> allDrones = ilpServiceClient.getAllDrones();
@@ -75,9 +76,9 @@ public class DroneQueryService {
                 .filter(drone -> drone.getId().equals(id))
                 .findFirst()
                 .orElseThrow(() -> {
-            logger.warn("Drone with id={} not found", id);
-            return new DroneNotFoundException("Drone with id=" + id + " not found");
-        });
+                    logger.warn("Drone with id={} not found", id);
+                    return new DroneNotFoundException("Drone with id=" + id + " not found");
+                });
     }
 
 
@@ -87,7 +88,7 @@ public class DroneQueryService {
      * @param queries The list of query requests from the POST body.
      * @return A list of matching drone IDs.
      */
-    public List<Integer> queryDrones(List<DroneQueryRequest> queries) {
+    public List<String> queryDrones(List<DroneQueryRequest> queries) {
         if (queries == null || queries.isEmpty()) {
             logger.warn("Empty query attributes list");
             return List.of();
@@ -107,7 +108,7 @@ public class DroneQueryService {
         }
 
         // Collect the IDs of the filtered drones
-        List<Integer> droneIds = filteredStream
+        List<String> droneIds = filteredStream
                 .map(Drone::getId)
                 .collect(Collectors.toList());
 
@@ -123,7 +124,7 @@ public class DroneQueryService {
      * @param attributeValue The value to match (operator is always "=").
      * @return A list of matching drone IDs.
      */
-    public List<Integer> queryByAttribute(String attributeName, String attributeValue) {
+    public List<String> queryByAttribute(String attributeName, String attributeValue) {
         logger.info("Executing dynamic path query: {} = {}", attributeName, attributeValue);
         // Create a single query request, as 3a is just 3b with one "equals" query
         DroneQueryRequest query = new DroneQueryRequest(attributeName, "=", attributeValue);
@@ -228,7 +229,7 @@ public class DroneQueryService {
      * @param dispatches List of dispatch records
      * @return List of available drone IDs
      */
-    public List<Integer> queryAvailableDrones(List<MedDispatchRec> dispatches) {
+    public List<String> queryAvailableDrones(List<MedDispatchRec> dispatches) {
         if (dispatches == null) {
             logger.warn("Dispatch record is null");
             return List.of();
@@ -253,14 +254,14 @@ public class DroneQueryService {
         List<DroneServicePointRequest> dronesForServicePoints = ilpServiceClient.getDroneAvailability();
 
         // build availability map <droneID, availabilityDetails>
-        Map<Integer, List<DroneAvailabilityDetails>> availabilityMap = buildAvailabilityMap(dronesForServicePoints);
+        Map<String, List<DroneAvailabilityDetails>> availabilityMap = buildAvailabilityMap(dronesForServicePoints);
 
         logger.info("Built availability map for {} drones", availabilityMap.size());
 
         logger.info("Querying available drones for {} dispatch records", dispatches.size());
 
         // filter drones based on availability and capabilities
-        List<Integer> availableDrones = new ArrayList<>();
+        List<String> availableDrones = new ArrayList<>();
 
         for (Drone drone : allDrones) {
             if (canDroneServeAllDispatches(drone, dispatches, aggregateRequirements, availabilityMap)) {
@@ -283,7 +284,7 @@ public class DroneQueryService {
      */
     private boolean canDroneServeAllDispatches(Drone drone, List<MedDispatchRec> dispatches,
                                                Requirements aggregatedRequirements,
-                                               Map<Integer, List<DroneAvailabilityDetails>> availabilityMap) {
+                                               Map<String, List<DroneAvailabilityDetails>> availabilityMap) {
 
         // check aggregate capabilities (capacity, cooling, heating)
         if (!checkCapabilities(drone, aggregatedRequirements)) {
@@ -321,7 +322,7 @@ public class DroneQueryService {
         // check capacity
         if (requirements.getCapacity() != null) {
             if (capability.getCapacity() == null ||
-            capability.getCapacity() < requirements.getCapacity()) {
+                    capability.getCapacity() < requirements.getCapacity()) {
                 logger.debug("Drone id={} failed capacity check: required={}, available={}",
                         drone.getId(), requirements.getCapacity(), capability.getCapacity());
                 return false;
@@ -357,8 +358,8 @@ public class DroneQueryService {
      * @param availabilityMap map of drone availability details
      * @return true if drone is available for the dispatch, false otherwise
      */
-    private boolean isDroneAvailableForDispatch(Integer droneId, MedDispatchRec dispatch,
-                                                Map<Integer, List<DroneAvailabilityDetails>> availabilityMap) {
+    private boolean isDroneAvailableForDispatch(String droneId, MedDispatchRec dispatch,
+                                                Map<String, List<DroneAvailabilityDetails>> availabilityMap) {
 
         // get availability details for drone
         List<DroneAvailabilityDetails> availabilityDetails = availabilityMap.get(droneId);
@@ -396,11 +397,11 @@ public class DroneQueryService {
      * @param allAvailabilityData list of drone availability data from service points
      * @return map of drone ID to list of availability details
      */
-    private Map<Integer, List<DroneAvailabilityDetails>> buildAvailabilityMap(List<DroneServicePointRequest> allAvailabilityData) {
-        Map<Integer, List<DroneAvailabilityDetails>> availabilityMap = new HashMap<>();
+    private Map<String, List<DroneAvailabilityDetails>> buildAvailabilityMap(List<DroneServicePointRequest> allAvailabilityData) {
+        Map<String, List<DroneAvailabilityDetails>> availabilityMap = new HashMap<>();
         for (DroneServicePointRequest servicePoint : allAvailabilityData) {
             for (DronesAtServicePoint drone : servicePoint.getDrones()) {
-                availabilityMap.put(drone.getId(), drone.getAvailable());
+                availabilityMap.put(String.valueOf(drone.getId()), drone.getAvailable());
             }
         }
         return availabilityMap;
@@ -496,14 +497,14 @@ public class DroneQueryService {
 
 
         // build availability map <droneID, availabilityDetails>
-        Map<Integer, List<DroneAvailabilityDetails>> availabilityMap = buildAvailabilityMap(dronesForServicePoints);
+        Map<String, List<DroneAvailabilityDetails>> availabilityMap = buildAvailabilityMap(dronesForServicePoints);
 
         // ID to Drone object map
-        Map<Integer, Drone> droneLookup = allDrones.stream()
+        Map<String, Drone> droneLookup = allDrones.stream()
                 .collect(Collectors.toMap(Drone::getId, drone -> drone));
 
         // ID to home service point map
-        Map<Integer, ServicePoints> droneToServicePoint = mapDronesToServicePoints(
+        Map<String, ServicePoints> droneToServicePoint = mapDronesToServicePoints(
                 droneLookup.keySet().stream().toList(),
                 dronesForServicePoints,
                 servicePoints
@@ -592,13 +593,13 @@ public class DroneQueryService {
      */
     private Optional<DronePathDetails> findSingleDroneForAllDispatches(
             List<MedDispatchRec> dispatches,
-            Map<Integer, Drone> droneLookup,
-            Map<Integer, ServicePoints> droneToServicePoint,
+            Map<String, Drone> droneLookup,
+            Map<String, ServicePoints> droneToServicePoint,
             List<RestrictedArea> restrictedAreas) {
 
 
         // 1. Get candidates
-        List<Integer> candidateDrones = queryAvailableDrones(dispatches);
+        List<String> candidateDrones = queryAvailableDrones(dispatches);
 
         // 2. OPTIMIZATION: Sort candidates to check "best" drones first
         if (!dispatches.isEmpty()) {
@@ -639,7 +640,7 @@ public class DroneQueryService {
         logger.info("The candidate drone IDs are: {}", candidateDrones);
 
         // 3. Try each candidate drone
-        for (Integer droneId : candidateDrones) {
+        for (String droneId : candidateDrones) {
             Drone drone = droneLookup.get(droneId);
             ServicePoints startPoint = droneToServicePoint.get(droneId);
 
@@ -775,24 +776,23 @@ public class DroneQueryService {
 
     private List<DronePathDetails> assignDispatchesToMultipleDrones(
             Set<MedDispatchRec> unassignedDispatches,
-            Map<Integer, Drone> droneLookup,
-            Map<Integer, List<DroneAvailabilityDetails>> availabilityMap,
-            Map<Integer, ServicePoints> droneToServicePoint,
+            Map<String, Drone> droneLookup,
+            Map<String, List<DroneAvailabilityDetails>> availabilityMap,
+            Map<String, ServicePoints> droneToServicePoint,
             List<RestrictedArea> restrictedAreas) {
 
-        // Placeholder implementation - returns empty list
         return new ArrayList<>();
     }
 
-        private double calculateDroneCost(Drone drone, int moves) {
-            DroneCapability cap = drone.getCapability();
-            return cap.getCostInitial() + cap.getCostFinal() + (moves * cap.getCostPerMove());
-        }
+    private double calculateDroneCost(Drone drone, int moves) {
+        DroneCapability cap = drone.getCapability();
+        return cap.getCostInitial() + cap.getCostFinal() + (moves * cap.getCostPerMove());
+    }
 
-        private double calculateProRataCost(Drone drone, int totalMoves, int numDeliveries) {
-            double totalCost = calculateDroneCost(drone, totalMoves);
-            return totalCost / numDeliveries;
-        }
+    private double calculateProRataCost(Drone drone, int totalMoves, int numDeliveries) {
+        double totalCost = calculateDroneCost(drone, totalMoves);
+        return totalCost / numDeliveries;
+    }
 
     private boolean violatesMaxCost(double newProRataCost,
                                     List<MedDispatchRec> existingRoute,
@@ -821,16 +821,16 @@ public class DroneQueryService {
      * @param servicePoints list of service points
      * @return map of drone ID to ServicePoints
      */
-    private Map<Integer, ServicePoints> mapDronesToServicePoints(List<Integer> droneIds,
-                                                                 List<DroneServicePointRequest> dronesForServicePoints,
-                                                                 List<ServicePoints> servicePoints) {
-        Map<Integer, ServicePoints> droneServicePointMap = new HashMap<>();
+    private Map<String, ServicePoints> mapDronesToServicePoints(List<String> droneIds,
+                                                                List<DroneServicePointRequest> dronesForServicePoints,
+                                                                List<ServicePoints> servicePoints) {
+        Map<String, ServicePoints> droneServicePointMap = new HashMap<>();
 
         // build a map of service point ID to ServicePoints object for quick lookup
         Map<Integer, ServicePoints> servicePointMap = servicePoints.stream()
                 .collect(Collectors.toMap(ServicePoints::getId, sp -> sp));
 
-        for (Integer droneId : droneIds) {
+        for (String droneId : droneIds) {
             for (DroneServicePointRequest dsp : dronesForServicePoints) {
                 for (DronesAtServicePoint droneAtSP : dsp.getDrones()) {
                     if (droneAtSP.getId().equals(droneId)) {

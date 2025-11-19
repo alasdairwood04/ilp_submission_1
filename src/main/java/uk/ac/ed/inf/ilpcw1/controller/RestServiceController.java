@@ -97,9 +97,9 @@ public class RestServiceController {
      * @return List of drone ID's
      */
     @GetMapping("/dronesWithCooling/{state}")
-    public ResponseEntity<List<Integer>> getDronesWithCooling(@PathVariable boolean state) {
+    public ResponseEntity<List<String>> getDronesWithCooling(@PathVariable boolean state) {
         validationService.validateCoolingState(state);
-        List<Integer> droneIds = droneQueryService.filterByCooling(state);
+        List<String> droneIds = droneQueryService.filterByCooling(state);
         return ResponseEntity.ok(droneIds);
     }
 
@@ -110,7 +110,7 @@ public class RestServiceController {
      * @throws uk.ac.ed.inf.ilpcw1.exception.DroneNotFoundException if dront not found (404)
      */
     @GetMapping("/droneDetails/{id}")
-    public ResponseEntity<Drone> getDroneDetails(@PathVariable Integer id) {
+    public ResponseEntity<Drone> getDroneDetails(@PathVariable String id) {
         validationService.validateDroneId(id);
         Drone drone = droneQueryService.getByDroneId(id);
         return ResponseEntity.ok(drone);
@@ -123,11 +123,11 @@ public class RestServiceController {
      * @return A list of matching drone IDs.
      */
     @GetMapping("/queryAsPath/{attribute-name}/{attribute-value}")
-    public ResponseEntity<List<Integer>> queryDronesByPath(
+    public ResponseEntity<List<String>> queryDronesByPath(
             @PathVariable("attribute-name") String attributeName,
             @PathVariable("attribute-value") String attributeValue) {
 
-        List<Integer> droneIds = droneQueryService.queryByAttribute(attributeName, attributeValue);
+        List<String> droneIds = droneQueryService.queryByAttribute(attributeName, attributeValue);
         return ResponseEntity.ok(droneIds);
     }
 
@@ -138,9 +138,9 @@ public class RestServiceController {
      * @return - A list of matching drone IDs.
      */
     @PostMapping("/query")
-    public ResponseEntity<List<Integer>> queryDrones(@RequestBody List<DroneQueryRequest> queries) {
+    public ResponseEntity<List<String>> queryDrones(@RequestBody List<DroneQueryRequest> queries) {
 
-        List<Integer> droneIds = droneQueryService.queryDrones(queries);
+        List<String> droneIds = droneQueryService.queryDrones(queries);
         return ResponseEntity.ok(droneIds);
     }
 
@@ -150,9 +150,9 @@ public class RestServiceController {
      * @return - The list of available drone IDs.
      */
     @PostMapping("/queryAvailableDrones")
-    public ResponseEntity<List<Integer>> queryAvailableDrones(@RequestBody List<MedDispatchRec> medDispatchRec) {
+    public ResponseEntity<List<String>> queryAvailableDrones(@RequestBody List<MedDispatchRec> medDispatchRec) {
 
-        List<Integer> availableDroneIds = droneQueryService.queryAvailableDrones(medDispatchRec);
+        List<String> availableDroneIds = droneQueryService.queryAvailableDrones(medDispatchRec);
         return ResponseEntity.ok(availableDroneIds);
     }
 

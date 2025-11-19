@@ -48,12 +48,14 @@ class StaticQueryControllerTest {
         @Test
         @DisplayName("Should return drones with cooling when state is true")
         void shouldReturnDronesWithCooling() throws Exception {
-            List<Integer> droneIds = Arrays.asList(1, 3, 5);
+            // IDs are now Strings
+            List<String> droneIds = Arrays.asList("1", "3", "5");
             when(droneQueryService.filterByCooling(true)).thenReturn(droneIds);
 
             mockMvc.perform(get("/api/v1/dronesWithCooling/true"))
                     .andExpect(status().isOk())
-                    .andExpect(content().json("[1, 3, 5]"));
+                    // Verify JSON array of strings
+                    .andExpect(content().json("[\"1\", \"3\", \"5\"]"));
 
             verify(droneQueryService, times(1)).filterByCooling(true);
         }
@@ -61,12 +63,12 @@ class StaticQueryControllerTest {
         @Test
         @DisplayName("Should return drones without cooling when state is false")
         void shouldReturnDronesWithoutCooling() throws Exception {
-            List<Integer> droneIds = Arrays.asList(2, 4, 6);
+            List<String> droneIds = Arrays.asList("2", "4", "6");
             when(droneQueryService.filterByCooling(false)).thenReturn(droneIds);
 
             mockMvc.perform(get("/api/v1/dronesWithCooling/false"))
                     .andExpect(status().isOk())
-                    .andExpect(content().json("[2, 4, 6]"));
+                    .andExpect(content().json("[\"2\", \"4\", \"6\"]"));
 
             verify(droneQueryService, times(1)).filterByCooling(false);
         }
@@ -99,8 +101,9 @@ class StaticQueryControllerTest {
         @Test
         @DisplayName("Should return drone details when ID exists")
         void shouldReturnDroneDetailsWhenExists() throws Exception {
+            // Drone ID is String "4"
             Drone mockDrone = Drone.builder()
-                    .id(4)
+                    .id("4")
                     .name("Test Drone")
                     .capability(DroneCapability.builder()
                             .cooling(true)
@@ -113,11 +116,11 @@ class StaticQueryControllerTest {
                             .build())
                     .build();
 
-            when(droneQueryService.getByDroneId(4)).thenReturn(mockDrone);
+            when(droneQueryService.getByDroneId("4")).thenReturn(mockDrone);
 
             mockMvc.perform(get("/api/v1/droneDetails/4"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.id").value(4))
+                    .andExpect(jsonPath("$.id").value("4"))
                     .andExpect(jsonPath("$.name").value("Test Drone"))
                     .andExpect(jsonPath("$.capability.cooling").value(true))
                     .andExpect(jsonPath("$.capability.heating").value(false))
@@ -127,13 +130,13 @@ class StaticQueryControllerTest {
                     .andExpect(jsonPath("$.capability.costInitial").value(3.4))
                     .andExpect(jsonPath("$.capability.costFinal").value(4.5));
 
-            verify(droneQueryService, times(1)).getByDroneId(4);
+            verify(droneQueryService, times(1)).getByDroneId("4");
         }
 
         @Test
         @DisplayName("Should return 404 when drone ID does not exist")
         void shouldReturn404WhenDroneNotFound() throws Exception {
-            when(droneQueryService.getByDroneId(999))
+            when(droneQueryService.getByDroneId("999"))
                     .thenThrow(new DroneNotFoundException("Drone with id 999 not found"));
 
             mockMvc.perform(get("/api/v1/droneDetails/999"))
@@ -141,43 +144,23 @@ class StaticQueryControllerTest {
                     .andExpect(jsonPath("$.error").value("Not Found"))
                     .andExpect(jsonPath("$.message").value("Drone with id 999 not found"));
 
-            verify(droneQueryService, times(1)).getByDroneId(999);
-        }
-
-        @Test
-        @DisplayName("Should handle negative drone ID")
-        void shouldHandleNegativeId() throws Exception {
-            when(droneQueryService.getByDroneId(-1))
-                    .thenThrow(new DroneNotFoundException("Drone with id -1 not found"));
-
-            mockMvc.perform(get("/api/v1/droneDetails/-1"))
-                    .andExpect(status().isNotFound());
-        }
-
-        @Test
-        @DisplayName("Should handle zero drone ID")
-        void shouldHandleZeroId() throws Exception {
-            when(droneQueryService.getByDroneId(0))
-                    .thenThrow(new DroneNotFoundException("Drone with id 0 not found"));
-
-            mockMvc.perform(get("/api/v1/droneDetails/0"))
-                    .andExpect(status().isNotFound());
+            verify(droneQueryService, times(1)).getByDroneId("999");
         }
 
         @Test
         @DisplayName("Should return drone with minimal capability data")
         void shouldReturnDroneWithMinimalData() throws Exception {
             Drone minimalDrone = Drone.builder()
-                    .id(1)
+                    .id("1")
                     .name("Minimal Drone")
                     .capability(DroneCapability.builder().build())
                     .build();
 
-            when(droneQueryService.getByDroneId(1)).thenReturn(minimalDrone);
+            when(droneQueryService.getByDroneId("1")).thenReturn(minimalDrone);
 
             mockMvc.perform(get("/api/v1/droneDetails/1"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.id").value(1))
+                    .andExpect(jsonPath("$.id").value("1"))
                     .andExpect(jsonPath("$.name").value("Minimal Drone"));
         }
     }

@@ -273,6 +273,25 @@ public class DroneQueryService {
         return availableDrones;
     }
 
+    // Internal version of queryAvailableDrones that uses cached data
+    private List<String> queryAvailableDronesInternal(
+            List<MedDispatchRec> dispatches,
+            Map<String, Drone> droneLookup,
+            Map<String, List<DroneAvailabilityDetails>> availabilityMap) { // Pass the map, not the raw list!
+
+        Requirements aggregateRequirements = aggregateRequirements(dispatches);
+        List<String> availableDrones = new ArrayList<>();
+
+        logger.info("The aggregated requirements are: {}", aggregateRequirements);
+
+
+        for (Drone drone : droneLookup.values()) {
+            if (canDroneServeAllDispatches(drone, dispatches, aggregateRequirements, availabilityMap)) {
+                availableDrones.add(drone.getId());
+            }
+        }
+        return availableDrones;
+    }
 
     /**
      * Helper method to check if a drone can serve all dispatches
@@ -475,26 +494,20 @@ public class DroneQueryService {
         return aggregated;
     }
 
-
     public DeliveryPathResponse calcDeliveryPath(List<MedDispatchRec> dispatches) {
         logger.info("Calculating delivery path for {} dispatch records", dispatches.size());
 
         // fetch all drones
         List<Drone> allDrones = ilpServiceClient.getAllDrones();
-        logger.info("Fetched {} drones", allDrones.size());
 
         // fetch drone availability
         List<DroneServicePointRequest> dronesForServicePoints = ilpServiceClient.getDroneAvailability();
-        logger.info("Fetched drone availability for {} service points", dronesForServicePoints.size());
 
         // fetch service points locations
         List<ServicePoints> servicePoints = ilpServiceClient.getServicePoints();
-        logger.info("Fetched {} service points", servicePoints.size());
 
         // fetch restricted areas
         List<RestrictedArea> restrictedAreas = ilpServiceClient.getRestrictedAreas();
-        logger.info("Fetched {} restricted areas", restrictedAreas.size());
-
 
         // build availability map <droneID, availabilityDetails>
         Map<String, List<DroneAvailabilityDetails>> availabilityMap = buildAvailabilityMap(dronesForServicePoints);
@@ -510,44 +523,16 @@ public class DroneQueryService {
                 servicePoints
         );
 
-
-        // using a set for easy removal of assigned dispatches
-        Set<MedDispatchRec> unassignedDispatches = new LinkedHashSet<>(dispatches);
-        List<DronePathDetails> finalDronePaths = new ArrayList<>();
-
-
-        // Simple case - one drone can handle all dispatches
-        logger.info("Checking if a single drone can handle all dispatches");
-
-        Optional<DronePathDetails> singleDronePathOpt = findSingleDroneForAllDispatches(
-                new ArrayList<>(unassignedDispatches),
+        List<DronePathDetails> finalDronePaths = assignDispatchesToMultipleDrones(
+                new ArrayList<>(dispatches),
                 droneLookup,
                 droneToServicePoint,
-                restrictedAreas
+                restrictedAreas,
+                availabilityMap, // cache of availability data
+                new HashSet<>() // used drone IDs
         );
 
-
-        if (singleDronePathOpt.isPresent()) {
-            logger.info("Simple case successful: single drone handles all dispatches");
-            finalDronePaths.add(singleDronePathOpt.get());
-            unassignedDispatches.clear();
-        } else {
-            // Phase 3: Complex Case - Multi-drone assignment
-            logger.info("Simple case failed, proceeding to complex multi-drone assignment");
-            finalDronePaths = assignDispatchesToMultipleDrones(
-                    new ArrayList<>(unassignedDispatches),
-                    droneLookup,
-                    droneToServicePoint,
-                    restrictedAreas
-            );
-        }
-
-        logger.info("Assigned dispatches to {} drones", finalDronePaths.size());
-
-
-
-
-        // 4. Calculate Totals (The Fix)
+        // 4. Calculate Totals
         double totalCost = 0.0;
         int totalMoves = 0;
 
@@ -558,10 +543,6 @@ public class DroneQueryService {
             int flightMoves = 0;
 
             for (Deliveries delivery : pathDetails.getDeliveries()) {
-                // CRITICAL FIX:
-                // A list [A, B, B] represents: Move A->B (1) + Hover (2) = 3 moves.
-                // The list size is 3. Therefore, moves = size().
-                // Do NOT subtract 1.
                 if (delivery.getFlightPath() != null) {
                     flightMoves += delivery.getFlightPath().size();
                 }
@@ -571,7 +552,6 @@ public class DroneQueryService {
             totalMoves += flightMoves;
 
             // Calculate cost PER DRONE flight (Fixed Costs + Variable Costs)
-            // Assuming calculateDroneCost handles (Initial + Final + (moves * perMove))
             totalCost += calculateDroneCost(drone, flightMoves);
         }
 
@@ -584,6 +564,92 @@ public class DroneQueryService {
                 .dronePaths(finalDronePaths)
                 .build();
     }
+    /**
+     * Recursive method to assign dispatches to multiple drones
+     * @param dispatches list of dispatch records
+     * @param droneLookup map of drone ID to Drone object
+     * @param droneToServicePoint map of drone ID to service point
+     * @param restrictedAreas list of restricted areas (drones cant fly in)
+     * @return list of DronePathDetails for assigned drones
+     */
+    private List<DronePathDetails> assignDispatchesToMultipleDrones(
+            List<MedDispatchRec> dispatches,
+            Map<String, Drone> droneLookup,
+            Map<String, ServicePoints> droneToServicePoint,
+            List<RestrictedArea> restrictedAreas,
+            Map<String, List<DroneAvailabilityDetails>> availabilityMap,
+            Set<String> usedDroneIds) { // Pass the map, not the raw list!
+
+        logger.info("Dispatch length: {}", dispatches.size());
+
+        // Attempt to assign the current batch to a single drone
+        Optional<DronePathDetails> singleDronePath = findSingleDroneForAllDispatches(
+                dispatches,
+                droneLookup,
+                droneToServicePoint,
+                restrictedAreas,
+                availabilityMap,
+                usedDroneIds
+        );
+
+        if (singleDronePath.isPresent()) {
+            usedDroneIds.add(singleDronePath.get().getDroneId());
+            return List.of(singleDronePath.get());
+        }
+
+        // Failure/Base Case:
+        // If we are down to 1 dispatch and it failed above, it means NO drone can handle it.
+        if (dispatches.size() <= 1) {
+            logger.error("Dispatch ID {} cannot be delivered by any available drone.", dispatches.getFirst().getId());
+            throw new RuntimeException("Undeliverable dispatch" + dispatches.getFirst().getId());
+        }
+
+        // 3. Determine Split Axis (Spatial Analysis)
+        double minLng = Double.MAX_VALUE, maxLng = -Double.MAX_VALUE;
+        double minLat = Double.MAX_VALUE, maxLat = -Double.MAX_VALUE;
+
+        for (MedDispatchRec d : dispatches) {
+            LngLat loc = d.getDelivery();
+            if (loc.getLongitude() < minLng) minLng = loc.getLongitude();
+            if (loc.getLongitude() > maxLng) maxLng = loc.getLongitude();
+            if (loc.getLatitude() < minLat) minLat = loc.getLatitude();
+            if (loc.getLatitude() > maxLat) maxLat = loc.getLatitude();
+        }
+
+        double lngRange = maxLng - minLng;
+        double latRange = maxLat - minLat;
+
+        // 4. Sort and Split
+        List<MedDispatchRec> sortedDispatches = new ArrayList<>(dispatches);
+
+        if (lngRange >= latRange) {
+            // Split by Longitude (East/West)
+            sortedDispatches.sort(Comparator.comparingDouble(d -> d.getDelivery().getLongitude()));
+        } else {
+            // Split by Latitude (North/South)
+            sortedDispatches.sort(Comparator.comparingDouble(d -> d.getDelivery().getLatitude()));
+        }
+
+        int midIndex = sortedDispatches.size() / 2;
+        List<MedDispatchRec> leftBatch = sortedDispatches.subList(0, midIndex);
+        List<MedDispatchRec> rightBatch = sortedDispatches.subList(midIndex, sortedDispatches.size());
+
+        // 5. Recurse
+        List<DronePathDetails> leftResults = assignDispatchesToMultipleDrones(
+                leftBatch, droneLookup, droneToServicePoint, restrictedAreas, availabilityMap, usedDroneIds);
+
+        List<DronePathDetails> rightResults = assignDispatchesToMultipleDrones(
+                rightBatch, droneLookup, droneToServicePoint, restrictedAreas, availabilityMap, usedDroneIds);
+
+        // 6. Combine
+        List<DronePathDetails> combined = new ArrayList<>();
+        combined.addAll(leftResults);
+        combined.addAll(rightResults);
+
+        return combined;
+    }
+
+
 
     /**
      * Helper method to find a single drone that can handle all dispatches
@@ -597,13 +663,18 @@ public class DroneQueryService {
             List<MedDispatchRec> dispatches,
             Map<String, Drone> droneLookup,
             Map<String, ServicePoints> droneToServicePoint,
-            List<RestrictedArea> restrictedAreas) {
+            List<RestrictedArea> restrictedAreas,
+            Map<String, List<DroneAvailabilityDetails>> availabilityMap,
+            Set<String> ignoredDroneIds) { // Drones already used in other assignments
 
 
-        // 1. Get candidates
-        List<String> candidateDrones = queryAvailableDrones(dispatches);
+        // Get candidates
+        List<String> candidateDrones = queryAvailableDronesInternal(dispatches, droneLookup, availabilityMap)
+                .stream()
+                .filter(id -> !ignoredDroneIds.contains(id)) // Exclude used drones
+                .collect(Collectors.toList());
 
-        // 2. OPTIMIZATION: Sort candidates to check "best" drones first
+        // Sort candidates to check "best" drones first
         if (!dispatches.isEmpty()) {
             // We use the first dispatch location as the target for our proximity heuristic
             // (Minimizing the approach flight is usually the biggest variable factor)
@@ -643,6 +714,7 @@ public class DroneQueryService {
 
         // 3. Try each candidate drone
         for (String droneId : candidateDrones) {
+            logger.info("Evaluating drone {}", droneId);
             Drone drone = droneLookup.get(droneId);
             ServicePoints startPoint = droneToServicePoint.get(droneId);
 
@@ -669,7 +741,7 @@ public class DroneQueryService {
 
             // calculate total moves - size - 1 steps + 1 extra for hover at each delivery
             int totalMoves = pathDetails.getDeliveries().stream()
-                    .mapToInt(d -> d.getFlightPath().size())
+                    .mapToInt(d -> d.getFlightPath().size()) // not -1 because hover is included as repeated point
                     .sum();
 
 
@@ -679,6 +751,10 @@ public class DroneQueryService {
                 double fixedCost = drone.getCapability().getCostInitial() + drone.getCapability().getCostFinal();
                 double totalCost = fixedCost + (costPerMove * totalMoves);
 
+                logger.info("Drone {} total moves: {}, total cost: {}", droneId, totalMoves, totalCost);
+
+                logger.info("the number of dispatches is: {}", dispatches.size());
+
                 // pro-rota cost (total cost / number of dispatches)
                 double costPerDispatch = totalCost / dispatches.size();
 
@@ -687,91 +763,30 @@ public class DroneQueryService {
                                 costPerDispatch <= d.getRequirements().getMaxCost());
 
                 if (meetsAllCostConstraints) {
-                    logger.info("Single drone {} can handle all dispatches", droneId);
+                    logger.info("Single drone {} can handle all dispatches. The cost per dispatch is: {} and the drones max allowed cost is: {}",
+                            droneId, costPerDispatch,
+                            dispatches.stream()
+                                    .map(MedDispatchRec::getRequirements)
+                                    .map(Requirements::getMaxCost)
+                                    .filter(Objects::nonNull)
+                                    .max(Double::compareTo)
+                                    .orElse(Double.MAX_VALUE)
+                    );
                     return Optional.of(pathDetails);
+                } else {
+                    logger.info("Drone {} route exceeds max cost constraints. The cost per dispatch is: {} and the drones max allowed cost is: {}",
+                            droneId, costPerDispatch,
+                            dispatches.stream()
+                                    .map(MedDispatchRec::getRequirements)
+                                    .map(Requirements::getMaxCost)
+                                    .filter(Objects::nonNull)
+                                    .max(Double::compareTo)
+                                    .orElse(Double.MAX_VALUE)
+                    );
                 }
             }
         }
         return Optional.empty();
-    }
-    /**
-     * Recursive method to assign dispatches to multiple drones
-     * @param dispatches list of dispatch records
-     * @param droneLookup map of drone ID to Drone object
-     * @param droneToServicePoint map of drone ID to service point
-     * @param restrictedAreas list of restricted areas (drones cant fly in)
-     * @return list of DronePathDetails for assigned drones
-     */
-    private List<DronePathDetails> assignDispatchesToMultipleDrones(
-            List<MedDispatchRec> dispatches,
-            Map<String, Drone> droneLookup,
-            Map<String, ServicePoints> droneToServicePoint,
-            List<RestrictedArea> restrictedAreas) {
-
-        // 1. Attempt to assign the current batch to a single drone
-        // This acts as our "Success" base case.
-        Optional<DronePathDetails> singleDronePath = findSingleDroneForAllDispatches(
-                dispatches,
-                droneLookup,
-                droneToServicePoint,
-                restrictedAreas
-        );
-
-        if (singleDronePath.isPresent()) {
-            return List.of(singleDronePath.get());
-        }
-
-        // 2. Failure/Base Case:
-        // If we are down to 1 dispatch and it failed above, it means NO drone can handle it.
-        if (dispatches.size() <= 1) {
-            logger.error("Dispatch ID {} cannot be delivered by any available drone.", dispatches.get(0).getId());
-            // You might want to throw an exception or return an empty list depending on desired behavior
-            throw new InvalidRequestException("Unable to schedule dispatch " + dispatches.get(0).getId());
-        }
-
-        // 3. Determine Split Axis (Spatial Analysis)
-        double minLng = Double.MAX_VALUE, maxLng = -Double.MAX_VALUE;
-        double minLat = Double.MAX_VALUE, maxLat = -Double.MAX_VALUE;
-
-        for (MedDispatchRec d : dispatches) {
-            LngLat loc = d.getDelivery();
-            if (loc.getLongitude() < minLng) minLng = loc.getLongitude();
-            if (loc.getLongitude() > maxLng) maxLng = loc.getLongitude();
-            if (loc.getLatitude() < minLat) minLat = loc.getLatitude();
-            if (loc.getLatitude() > maxLat) maxLat = loc.getLatitude();
-        }
-
-        double lngRange = maxLng - minLng;
-        double latRange = maxLat - minLat;
-
-        // 4. Sort and Split
-        List<MedDispatchRec> sortedDispatches = new ArrayList<>(dispatches);
-
-        if (lngRange >= latRange) {
-            // Split by Longitude (East/West)
-            sortedDispatches.sort(Comparator.comparingDouble(d -> d.getDelivery().getLongitude()));
-        } else {
-            // Split by Latitude (North/South)
-            sortedDispatches.sort(Comparator.comparingDouble(d -> d.getDelivery().getLatitude()));
-        }
-
-        int midIndex = sortedDispatches.size() / 2;
-        List<MedDispatchRec> leftBatch = sortedDispatches.subList(0, midIndex);
-        List<MedDispatchRec> rightBatch = sortedDispatches.subList(midIndex, sortedDispatches.size());
-
-        // 5. Recurse
-        List<DronePathDetails> leftResults = assignDispatchesToMultipleDrones(
-                leftBatch, droneLookup, droneToServicePoint, restrictedAreas);
-
-        List<DronePathDetails> rightResults = assignDispatchesToMultipleDrones(
-                rightBatch, droneLookup, droneToServicePoint, restrictedAreas);
-
-        // 6. Combine
-        List<DronePathDetails> combined = new ArrayList<>();
-        combined.addAll(leftResults);
-        combined.addAll(rightResults);
-
-        return combined;
     }
 
     /**

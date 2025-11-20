@@ -44,9 +44,6 @@ public class PathfindingService {
     public List<LngLat> findPath(LngLat start, LngLat goal, List<RestrictedArea> restrictedAreas) {
         logger.info("Finding path from {} to {}", start, goal);
 
-        logger.info("Start Lng: {}, Goal Lng: {}", start.getLongitude(), goal.getLongitude());
-        logger.info("Start Lat: {}, Goal Lat: {}", start.getLatitude(), goal.getLatitude());
-
         // If already close to goal, return direct path
         if (restService.isCloseTo(start, goal)) {
             logger.info("Start is already close to goal");
@@ -77,7 +74,7 @@ public class PathfindingService {
         allNodes.put(positionKey(start), startNode);
 
         int iterations = 0;
-        final int MAX_ITERATIONS = 50000; // Prevent infinite loops
+        final int MAX_ITERATIONS = 75000; // Prevent infinite loops
 
         List<Region> noFlyZones = restrictedAreas.stream()
                 .map(this::convertToRegion)

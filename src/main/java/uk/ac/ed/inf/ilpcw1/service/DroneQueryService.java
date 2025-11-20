@@ -494,6 +494,13 @@ public class DroneQueryService {
         return aggregated;
     }
 
+    // Helper to find the nearest Service Point
+    private ServicePoints findNearestServicePoint(LngLat location, Collection<ServicePoints> servicePoints) {
+        return servicePoints.stream()
+                .min(Comparator.comparingDouble(sp -> restService.calculateDistance(location, sp.getLocation())))
+                .orElseThrow(() -> new RuntimeException("No Service Points found"));
+    }
+
     public DeliveryPathResponse calcDeliveryPath(List<MedDispatchRec> dispatches) {
         logger.info("Calculating delivery path for {} dispatch records", dispatches.size());
 
@@ -622,7 +629,11 @@ public class DroneQueryService {
         // 4. Sort and Split
         List<MedDispatchRec> sortedDispatches = new ArrayList<>(dispatches);
 
-        if (lngRange >= latRange) {
+        int splitIndex;
+
+        boolean splitByLongitude = lngRange >= latRange;
+
+        if (splitByLongitude) {
             // Split by Longitude (East/West)
             sortedDispatches.sort(Comparator.comparingDouble(d -> d.getDelivery().getLongitude()));
         } else {
@@ -630,9 +641,11 @@ public class DroneQueryService {
             sortedDispatches.sort(Comparator.comparingDouble(d -> d.getDelivery().getLatitude()));
         }
 
-        int midIndex = sortedDispatches.size() / 2;
-        List<MedDispatchRec> leftBatch = sortedDispatches.subList(0, midIndex);
-        List<MedDispatchRec> rightBatch = sortedDispatches.subList(midIndex, sortedDispatches.size());
+
+        splitIndex = findBestSplitPoint(sortedDispatches, lngRange, latRange);
+
+        List<MedDispatchRec> leftBatch = sortedDispatches.subList(0, splitIndex);
+        List<MedDispatchRec> rightBatch = sortedDispatches.subList(splitIndex, sortedDispatches.size());
 
         // 5. Recurse
         List<DronePathDetails> leftResults = assignDispatchesToMultipleDrones(
@@ -648,7 +661,6 @@ public class DroneQueryService {
 
         return combined;
     }
-
 
 
     /**
@@ -788,6 +800,44 @@ public class DroneQueryService {
         }
         return Optional.empty();
     }
+
+
+    private int findBestSplitPoint(List<MedDispatchRec> sorted, double lngRange, double latRange) {
+        if (sorted.size() <= 2) return 1;
+
+        double maxGapScore = 0;
+        int bestSplit = sorted.size() / 2;  // Default to middle
+
+        boolean isLongitude = lngRange >= latRange;
+
+        // Look for the biggest gap near the middle
+        for (int i = 1; i < sorted.size(); i++) {
+            double gap = isLongitude
+                    ? sorted.get(i).getDelivery().getLongitude() -
+                    sorted.get(i-1).getDelivery().getLongitude()
+                    : sorted.get(i).getDelivery().getLatitude() -
+                    sorted.get(i-1).getDelivery().getLatitude();
+
+            // Normalize gap by total range
+            double normalizedGap = gap / (isLongitude ? lngRange : latRange);
+
+            // Prefer splits near middle (penalty for extreme splits)
+            double distanceFromMiddle = Math.abs(i - sorted.size() / 2.0);
+            double balancePenalty = 1.0 - (distanceFromMiddle / sorted.size());
+
+            // Combined score: larger gaps near middle are best
+            double score = normalizedGap * balancePenalty;
+
+            if (score > maxGapScore) {
+                maxGapScore = score;
+                bestSplit = i;
+            }
+        }
+
+        logger.info("Split at index {} (gap score: {:.4f})", bestSplit, maxGapScore);
+        return bestSplit;
+    }
+
 
     /**
      * creates a flight path for a drone (SP -> D1 -> D2 -> ... -> SP) with hover points

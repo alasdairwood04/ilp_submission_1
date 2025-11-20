@@ -37,6 +37,7 @@ public class DroneQueryService {
 
     /**
      * Filter drones by cooling capability
+     *
      * @param hasCooling true to get drones with cooling, false for drones without
      * @return List of drones IDs matching criteria - either having or not having cooling
      */
@@ -63,6 +64,7 @@ public class DroneQueryService {
 
     /**
      * Get details of a specific drone by ID
+     *
      * @param id The drone ID
      * @return The Drone object
      * @throws DroneNotFoundException if Drone is not found
@@ -120,7 +122,7 @@ public class DroneQueryService {
      * Implements logic for 3a: Query drones by a single path variable attribute.
      * Uses query endpoint logic - everything is just '='.
      *
-     * @param attributeName The attribute to check.
+     * @param attributeName  The attribute to check.
      * @param attributeValue The value to match (operator is always "=").
      * @return A list of matching drone IDs.
      */
@@ -226,6 +228,7 @@ public class DroneQueryService {
 
     /**
      * Implements logic for 4: Query available drones for a list of dispatch records.
+     *
      * @param dispatches List of dispatch records
      * @return List of available drone IDs
      */
@@ -295,10 +298,11 @@ public class DroneQueryService {
 
     /**
      * Helper method to check if a drone can serve all dispatches
-     * @param drone used to compare its capabilities
-     * @param dispatches list of dispatch records
+     *
+     * @param drone                  used to compare its capabilities
+     * @param dispatches             list of dispatch records
      * @param aggregatedRequirements the aggregated requirements from all dispatches
-     * @param availabilityMap map of drone availability details
+     * @param availabilityMap        map of drone availability details
      * @return true if drone can serve all dispatches, false otherwise
      */
     private boolean canDroneServeAllDispatches(Drone drone, List<MedDispatchRec> dispatches,
@@ -327,7 +331,8 @@ public class DroneQueryService {
 
     /**
      * Helper method to check if a drone meets the aggregated requirements
-     * @param drone to check
+     *
+     * @param drone        to check
      * @param requirements aggregated requirements
      * @return true if drone meets requirements, false otherwise
      */
@@ -372,8 +377,9 @@ public class DroneQueryService {
 
     /**
      * Helper method to check if a drone is available for a specific dispatch
-     * @param droneId id of the drone
-     * @param dispatch dispatch record
+     *
+     * @param droneId         id of the drone
+     * @param dispatch        dispatch record
      * @param availabilityMap map of drone availability details
      * @return true if drone is available for the dispatch, false otherwise
      */
@@ -413,6 +419,7 @@ public class DroneQueryService {
 
     /**
      * Helper method to build a map of drone availability
+     *
      * @param allAvailabilityData list of drone availability data from service points
      * @return map of drone ID to list of availability details
      */
@@ -428,6 +435,7 @@ public class DroneQueryService {
 
     /**
      * Helper method to aggregate requirements from multiple dispatch records
+     *
      * @param dispatches
      * @return aggregated requirements
      */
@@ -571,12 +579,14 @@ public class DroneQueryService {
                 .dronePaths(finalDronePaths)
                 .build();
     }
+
     /**
      * Recursive method to assign dispatches to multiple drones
-     * @param dispatches list of dispatch records
-     * @param droneLookup map of drone ID to Drone object
+     *
+     * @param dispatches          list of dispatch records
+     * @param droneLookup         map of drone ID to Drone object
      * @param droneToServicePoint map of drone ID to service point
-     * @param restrictedAreas list of restricted areas (drones cant fly in)
+     * @param restrictedAreas     list of restricted areas (drones cant fly in)
      * @return list of DronePathDetails for assigned drones
      */
     private List<DronePathDetails> assignDispatchesToMultipleDrones(
@@ -585,7 +595,7 @@ public class DroneQueryService {
             Map<String, ServicePoints> droneToServicePoint,
             List<RestrictedArea> restrictedAreas,
             Map<String, List<DroneAvailabilityDetails>> availabilityMap,
-            Set<String> usedDroneIds) { // Pass the map, not the raw list!
+            Set<String> usedDroneIds) {
 
         logger.info("Dispatch length: {}", dispatches.size());
 
@@ -604,14 +614,14 @@ public class DroneQueryService {
             return List.of(singleDronePath.get());
         }
 
-        // Failure/Base Case:
-        // If we are down to 1 dispatch and it failed above, it means NO drone can handle it.
+        // Failure/Base Case
         if (dispatches.size() <= 1) {
-            logger.error("Dispatch ID {} cannot be delivered by any available drone.", dispatches.getFirst().getId());
-            throw new RuntimeException("Undeliverable dispatch" + dispatches.getFirst().getId());
+            logger.error("Dispatch ID {} cannot be delivered by any available drone.",
+                    dispatches.getFirst().getId());
+            throw new RuntimeException("Undeliverable dispatch " + dispatches.getFirst().getId());
         }
 
-        // 3. Determine Split Axis (Spatial Analysis)
+        // 3. Determine Split Strategy
         double minLng = Double.MAX_VALUE, maxLng = -Double.MAX_VALUE;
         double minLat = Double.MAX_VALUE, maxLat = -Double.MAX_VALUE;
 
@@ -626,26 +636,71 @@ public class DroneQueryService {
         double lngRange = maxLng - minLng;
         double latRange = maxLat - minLat;
 
-        // 4. Sort and Split
-        List<MedDispatchRec> sortedDispatches = new ArrayList<>(dispatches);
+        // check if dispatches are co-located
+        final double COLOCATION_THRESHOLD = 0.0001; // ~10 meters
+        boolean isColocated = (lngRange < COLOCATION_THRESHOLD && latRange < COLOCATION_THRESHOLD);
 
-        int splitIndex;
+        List<MedDispatchRec> leftBatch;
+        List<MedDispatchRec> rightBatch;
 
-        boolean splitByLongitude = lngRange >= latRange;
+        if (isColocated) {
+            // capacity split
+            logger.info("Dispatches are co-located. Using capacity-based split.");
 
-        if (splitByLongitude) {
-            // Split by Longitude (East/West)
-            sortedDispatches.sort(Comparator.comparingDouble(d -> d.getDelivery().getLongitude()));
+            // Calculate aggregated capacity
+            Requirements aggregated = aggregateRequirements(dispatches);
+            double totalCapacity = aggregated.getCapacity() != null ? aggregated.getCapacity() : 0.0;
+
+            // Find max capacity of available drones (heuristic: assume ~15-20kg max)
+            double targetCapacity = 20.0; // Conservative estimate
+
+            // Accumulate dispatches until we hit target capacity
+            List<MedDispatchRec> sortedByCapacity = new ArrayList<>(dispatches);
+            sortedByCapacity.sort(Comparator.comparingDouble(d ->
+                    d.getRequirements().getCapacity() != null ? d.getRequirements().getCapacity() : 0.0));
+
+            double accumulated = 0.0;
+            int splitIndex = 0;
+
+            for (int i = 0; i < sortedByCapacity.size(); i++) {
+                double cap = sortedByCapacity.get(i).getRequirements().getCapacity() != null
+                        ? sortedByCapacity.get(i).getRequirements().getCapacity() : 0.0;
+
+                if (accumulated + cap <= targetCapacity) {
+                    accumulated += cap;
+                    splitIndex = i + 1;
+                } else {
+                    break;
+                }
+            }
+
+            // ensure no empty batches
+            if (splitIndex == 0) splitIndex = 1;
+            if (splitIndex >= sortedByCapacity.size()) splitIndex = sortedByCapacity.size() - 1;
+
+            leftBatch = sortedByCapacity.subList(0, splitIndex);
+            rightBatch = sortedByCapacity.subList(splitIndex, sortedByCapacity.size());
+
+            logger.info("Capacity split: {} dispatches ({} kg) | {} dispatches ({} kg)",
+                    leftBatch.size(), accumulated,
+                    rightBatch.size(), totalCapacity - accumulated);
         } else {
-            // Split by Latitude (North/South)
-            sortedDispatches.sort(Comparator.comparingDouble(d -> d.getDelivery().getLatitude()));
+
+            // spatial split
+            List<MedDispatchRec> sortedDispatches = new ArrayList<>(dispatches);
+            boolean splitByLongitude = lngRange >= latRange;
+
+            if (splitByLongitude) {
+                sortedDispatches.sort(Comparator.comparingDouble(d -> d.getDelivery().getLongitude()));
+            } else {
+                sortedDispatches.sort(Comparator.comparingDouble(d -> d.getDelivery().getLatitude()));
+            }
+
+            int splitIndex = findBestSplitPoint(sortedDispatches, lngRange, latRange);
+
+            leftBatch = sortedDispatches.subList(0, splitIndex);
+            rightBatch = sortedDispatches.subList(splitIndex, sortedDispatches.size());
         }
-
-
-        splitIndex = findBestSplitPoint(sortedDispatches, lngRange, latRange);
-
-        List<MedDispatchRec> leftBatch = sortedDispatches.subList(0, splitIndex);
-        List<MedDispatchRec> rightBatch = sortedDispatches.subList(splitIndex, sortedDispatches.size());
 
         // 5. Recurse
         List<DronePathDetails> leftResults = assignDispatchesToMultipleDrones(
@@ -662,13 +717,13 @@ public class DroneQueryService {
         return combined;
     }
 
-
     /**
      * Helper method to find a single drone that can handle all dispatches
-     * @param dispatches list of dispatch records
-     * @param droneLookup map of drone ID to Drone object
+     *
+     * @param dispatches          list of dispatch records
+     * @param droneLookup         map of drone ID to Drone object
      * @param droneToServicePoint map of drone ID to service point
-     * @param restrictedAreas list of restricted areas (drones cant fly in)
+     * @param restrictedAreas     list of restricted areas (drones cant fly in)
      * @return Optional of DronePathDetails if a single drone can handle all dispatches, empty otherwise
      */
     private Optional<DronePathDetails> findSingleDroneForAllDispatches(
@@ -814,9 +869,9 @@ public class DroneQueryService {
         for (int i = 1; i < sorted.size(); i++) {
             double gap = isLongitude
                     ? sorted.get(i).getDelivery().getLongitude() -
-                    sorted.get(i-1).getDelivery().getLongitude()
+                    sorted.get(i - 1).getDelivery().getLongitude()
                     : sorted.get(i).getDelivery().getLatitude() -
-                    sorted.get(i-1).getDelivery().getLatitude();
+                    sorted.get(i - 1).getDelivery().getLatitude();
 
             // Normalize gap by total range
             double normalizedGap = gap / (isLongitude ? lngRange : latRange);
@@ -841,6 +896,7 @@ public class DroneQueryService {
 
     /**
      * creates a flight path for a drone (SP -> D1 -> D2 -> ... -> SP) with hover points
+     *
      * @param drone
      * @param startPoint
      * @param dispatches
@@ -951,9 +1007,10 @@ public class DroneQueryService {
 
     /**
      * Helper method to map drones to their service points
-     * @param droneIds list of drone IDs
+     *
+     * @param droneIds               list of drone IDs
      * @param dronesForServicePoints location of drones at service points
-     * @param servicePoints list of service points
+     * @param servicePoints          list of service points
      * @return map of drone ID to ServicePoints
      */
     private Map<String, ServicePoints> mapDronesToServicePoints(List<String> droneIds,
@@ -979,5 +1036,61 @@ public class DroneQueryService {
         }
 
         return droneServicePointMap;
+    }
+
+    public GeoJsonLineString calcDeliveryPathAsGeoJson(List<MedDispatchRec> dispatches) {
+        logger.info("Calculating GeoJSON path for {} dispatch records", dispatches.size());
+
+        // 1. Fetch all necessary data
+        List<Drone> allDrones = ilpServiceClient.getAllDrones();
+        List<DroneServicePointRequest> dronesForServicePoints = ilpServiceClient.getDroneAvailability();
+        List<ServicePoints> servicePoints = ilpServiceClient.getServicePoints();
+        List<RestrictedArea> restrictedAreas = ilpServiceClient.getRestrictedAreas();
+
+        // 2. Prepare Maps (reuse existing helpers)
+        Map<String, List<DroneAvailabilityDetails>> availabilityMap = buildAvailabilityMap(dronesForServicePoints);
+        Map<String, Drone> droneLookup = allDrones.stream()
+                .collect(Collectors.toMap(Drone::getId, drone -> drone));
+        Map<String, ServicePoints> droneToServicePoint = mapDronesToServicePoints(
+                droneLookup.keySet().stream().toList(),
+                dronesForServicePoints,
+                servicePoints
+        );
+
+        // 3. Find a single drone for all dispatches
+        // passing an empty set for ignoredDroneIds as we want to consider all drones
+        Optional<DronePathDetails> pathResult = findSingleDroneForAllDispatches(
+                dispatches,
+                droneLookup,
+                droneToServicePoint,
+                restrictedAreas,
+                availabilityMap,
+                new HashSet<>()
+        );
+
+        // 4. Handle Failure
+        if (pathResult.isEmpty()) {
+            logger.warn("No single drone could be found to execute the given dispatches for GeoJSON.");
+            throw new InvalidRequestException("No single drone available to handle all dispatches in a single sequence");
+        }
+
+        // 5. Convert Path to GeoJSON Coordinates
+        List<List<Double>> coordinates = new ArrayList<>();
+        DronePathDetails details = pathResult.get();
+
+        if (details.getDeliveries() != null) {
+            for (Deliveries delivery : details.getDeliveries()) {
+                if (delivery.getFlightPath() != null) {
+                    for (LngLat point : delivery.getFlightPath()) {
+                        // GeoJSON uses [longitude, latitude] format
+                        coordinates.add(List.of(point.getLongitude(), point.getLatitude()));
+                    }
+                }
+            }
+        }
+        return GeoJsonLineString.builder()
+                .coordinates(coordinates)
+                .build();
+
     }
 }

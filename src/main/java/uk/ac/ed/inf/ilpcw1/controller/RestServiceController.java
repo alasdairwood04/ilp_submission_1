@@ -167,4 +167,15 @@ public class RestServiceController {
         DeliveryPathResponse response = droneQueryService.calcDeliveryPath(medDispatchRecs);
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/calcDeliveryPathAsGeoJson")
+    public ResponseEntity<GeoJsonLineString> calculateDeliveryPathAsGeo(@RequestBody List<MedDispatchRec> medDispatchRecs) {
+        // Validate request body
+        if (medDispatchRecs == null || medDispatchRecs.isEmpty()) {
+            throw new uk.ac.ed.inf.ilpcw1.exception.InvalidRequestException("Dispatch list cannot be empty");
+        }
+
+        GeoJsonLineString response = droneQueryService.calcDeliveryPathAsGeoJson(medDispatchRecs);
+        return ResponseEntity.ok(response);    }
+
 }

@@ -599,7 +599,7 @@ public class DroneQueryService {
 
         logger.info("Dispatch length: {}", dispatches.size());
 
-        // Attempt to assign the current batch to a single drone
+        // Base Case: Try to assign all dispatches to a single drone
         Optional<DronePathDetails> singleDronePath = findSingleDroneForAllDispatches(
                 dispatches,
                 droneLookup,
@@ -621,7 +621,7 @@ public class DroneQueryService {
             throw new RuntimeException("Undeliverable dispatch " + dispatches.getFirst().getId());
         }
 
-        // 3. Determine Split Strategy
+        // Determine if dispatches are co-located or spatially distributed
         double minLng = Double.MAX_VALUE, maxLng = -Double.MAX_VALUE;
         double minLat = Double.MAX_VALUE, maxLat = -Double.MAX_VALUE;
 
@@ -636,87 +636,219 @@ public class DroneQueryService {
         double lngRange = maxLng - minLng;
         double latRange = maxLat - minLat;
 
-        // check if dispatches are co-located
         final double COLOCATION_THRESHOLD = 0.0001; // ~10 meters
         boolean isColocated = (lngRange < COLOCATION_THRESHOLD && latRange < COLOCATION_THRESHOLD);
 
-        List<MedDispatchRec> leftBatch;
-        List<MedDispatchRec> rightBatch;
-
         if (isColocated) {
-            // capacity split
-            logger.info("Dispatches are co-located. Using capacity-based split.");
+            // CO-LOCATED CASE: Use greedy capacity-based assignment
+            logger.info("Dispatches are co-located. Using greedy capacity-based assignment.");
+            return greedyCapacityAssignment(
+                    dispatches,
+                    droneLookup,
+                    droneToServicePoint,
+                    restrictedAreas,
+                    availabilityMap,
+                    usedDroneIds
+            );
+        } else {
+            // SPATIAL CASE: Use spatial split
+            logger.info("Dispatches are spatially distributed. Using spatial split.");
+            return spatialSplitAssignment(
+                    dispatches,
+                    droneLookup,
+                    droneToServicePoint,
+                    restrictedAreas,
+                    availabilityMap,
+                    usedDroneIds,
+                    lngRange,
+                    latRange
+            );
+        }
+    }
 
-            // Calculate aggregated capacity
-            Requirements aggregated = aggregateRequirements(dispatches);
-            double totalCapacity = aggregated.getCapacity() != null ? aggregated.getCapacity() : 0.0;
+    /**
+     * Greedy capacity-based assignment for co-located dispatches
+     * Packs as many dispatches as possible into each drone before moving to the next
+     */
+    private List<DronePathDetails> greedyCapacityAssignment(
+            List<MedDispatchRec> dispatches,
+            Map<String, Drone> droneLookup,
+            Map<String, ServicePoints> droneToServicePoint,
+            List<RestrictedArea> restrictedAreas,
+            Map<String, List<DroneAvailabilityDetails>> availabilityMap,
+            Set<String> usedDroneIds) {
 
-            // Find max capacity of available drones (heuristic: assume ~15-20kg max)
-            double targetCapacity = 20.0; // Conservative estimate
+        List<DronePathDetails> allPaths = new ArrayList<>();
+        List<MedDispatchRec> remaining = new ArrayList<>(dispatches);
 
-            // Accumulate dispatches until we hit target capacity
-            List<MedDispatchRec> sortedByCapacity = new ArrayList<>(dispatches);
-            sortedByCapacity.sort(Comparator.comparingDouble(d ->
-                    d.getRequirements().getCapacity() != null ? d.getRequirements().getCapacity() : 0.0));
+        // Sort dispatches by capacity (largest first) for better packing
+        remaining.sort(Comparator.comparingDouble(d ->
+                -(d.getRequirements().getCapacity() != null ? d.getRequirements().getCapacity() : 0.0)));
 
-            double accumulated = 0.0;
-            int splitIndex = 0;
+        while (!remaining.isEmpty()) {
+            // Get available candidates for the first dispatch in remaining
+            List<String> candidates = queryAvailableDronesInternal(
+                    List.of(remaining.get(0)),
+                    droneLookup,
+                    availabilityMap
+            ).stream()
+                    .filter(id -> !usedDroneIds.contains(id))
+                    .collect(Collectors.toList());
 
-            for (int i = 0; i < sortedByCapacity.size(); i++) {
-                double cap = sortedByCapacity.get(i).getRequirements().getCapacity() != null
-                        ? sortedByCapacity.get(i).getRequirements().getCapacity() : 0.0;
+            if (candidates.isEmpty()) {
+                logger.error("No available drones for dispatch ID {}", remaining.get(0).getId());
+                throw new RuntimeException("Undeliverable dispatch " + remaining.get(0).getId());
+            }
 
-                if (accumulated + cap <= targetCapacity) {
-                    accumulated += cap;
-                    splitIndex = i + 1;
-                } else {
-                    break;
+            // Sort candidates by capacity (largest first) and proximity
+            LngLat targetLocation = remaining.get(0).getDelivery();
+            candidates.sort((id1, id2) -> {
+                Drone d1 = droneLookup.get(id1);
+                Drone d2 = droneLookup.get(id2);
+
+                // Primary: Higher capacity first
+                int capacityCompare = Double.compare(
+                        d2.getCapability().getCapacity(),
+                        d1.getCapability().getCapacity()
+                );
+
+                if (capacityCompare != 0) return capacityCompare;
+
+                // Secondary: Closer service point first
+                ServicePoints sp1 = droneToServicePoint.get(id1);
+                ServicePoints sp2 = droneToServicePoint.get(id2);
+                double dist1 = restService.calculateDistance(sp1.getLocation(), targetLocation);
+                double dist2 = restService.calculateDistance(sp2.getLocation(), targetLocation);
+
+                return Double.compare(dist1, dist2);
+            });
+
+            // Try each candidate drone and pack as many dispatches as possible
+            boolean foundAssignment = false;
+
+            for (String droneId : candidates) {
+                Drone drone = droneLookup.get(droneId);
+                List<MedDispatchRec> packed = new ArrayList<>();
+                double accumulatedCapacity = 0.0;
+
+                // Greedy pack: Add dispatches until we hit capacity or move limit
+                for (MedDispatchRec dispatch : remaining) {
+                    double reqCapacity = dispatch.getRequirements().getCapacity() != null
+                            ? dispatch.getRequirements().getCapacity() : 0.0;
+
+                    // Check if adding this dispatch would exceed drone capacity
+                    if (accumulatedCapacity + reqCapacity <= drone.getCapability().getCapacity()) {
+                        // Check if this dispatch is compatible with already packed ones
+                        List<MedDispatchRec> testBatch = new ArrayList<>(packed);
+                        testBatch.add(dispatch);
+
+                        // Verify aggregated requirements are still met
+                        Requirements aggregated = aggregateRequirements(testBatch);
+                        if (checkCapabilities(drone, aggregated)) {
+                            // Check availability for this specific dispatch
+                            if (isDroneAvailableForDispatch(droneId, dispatch, availabilityMap)) {
+                                packed.add(dispatch);
+                                accumulatedCapacity += reqCapacity;
+                            }
+                        }
+                    }
+                }
+
+                if (!packed.isEmpty()) {
+                    // Try to build a route for this drone with packed dispatches
+                    ServicePoints startPoint = droneToServicePoint.get(droneId);
+                    DronePathDetails pathDetails = buildDroneRoute(
+                            drone,
+                            startPoint,
+                            packed,
+                            restrictedAreas
+                    );
+
+                    // Verify the route is valid (within move limits)
+                    int totalMoves = pathDetails.getDeliveries().stream()
+                            .mapToInt(d -> d.getFlightPath().size())
+                            .sum();
+
+                    if (totalMoves <= drone.getCapability().getMaxMoves()) {
+                        // Check maxCost constraints
+                        double costPerMove = drone.getCapability().getCostPerMove();
+                        double fixedCost = drone.getCapability().getCostInitial()
+                                + drone.getCapability().getCostFinal();
+                        double totalCost = fixedCost + (costPerMove * totalMoves);
+                        double costPerDispatch = totalCost / packed.size();
+
+                        boolean meetsAllCostConstraints = packed.stream()
+                                .allMatch(d -> d.getRequirements().getMaxCost() == null ||
+                                        costPerDispatch <= d.getRequirements().getMaxCost());
+
+                        if (meetsAllCostConstraints) {
+                            logger.info("Drone {} successfully packed {} dispatches ({}kg / {}kg capacity)",
+                                    droneId, packed.size(), accumulatedCapacity,
+                                    drone.getCapability().getCapacity());
+
+                            allPaths.add(pathDetails);
+                            usedDroneIds.add(droneId);
+                            remaining.removeAll(packed);
+                            foundAssignment = true;
+                            break; // Move to next batch
+                        }
+                    }
                 }
             }
 
-            // ensure no empty batches
-            if (splitIndex == 0) splitIndex = 1;
-            if (splitIndex >= sortedByCapacity.size()) splitIndex = sortedByCapacity.size() - 1;
-
-            leftBatch = sortedByCapacity.subList(0, splitIndex);
-            rightBatch = sortedByCapacity.subList(splitIndex, sortedByCapacity.size());
-
-            logger.info("Capacity split: {} dispatches ({} kg) | {} dispatches ({} kg)",
-                    leftBatch.size(), accumulated,
-                    rightBatch.size(), totalCapacity - accumulated);
-        } else {
-
-            // spatial split
-            List<MedDispatchRec> sortedDispatches = new ArrayList<>(dispatches);
-            boolean splitByLongitude = lngRange >= latRange;
-
-            if (splitByLongitude) {
-                sortedDispatches.sort(Comparator.comparingDouble(d -> d.getDelivery().getLongitude()));
-            } else {
-                sortedDispatches.sort(Comparator.comparingDouble(d -> d.getDelivery().getLatitude()));
+            if (!foundAssignment) {
+                // If we couldn't assign even a single dispatch, it's undeliverable
+                logger.error("Could not find suitable drone for dispatch {}", remaining.get(0).getId());
+                throw new RuntimeException("Undeliverable dispatch " + remaining.get(0).getId());
             }
-
-            int splitIndex = findBestSplitPoint(sortedDispatches, lngRange, latRange);
-
-            leftBatch = sortedDispatches.subList(0, splitIndex);
-            rightBatch = sortedDispatches.subList(splitIndex, sortedDispatches.size());
         }
 
-        // 5. Recurse
+        return allPaths;
+    }
+
+    /**
+     * Spatial split assignment for distributed dispatches
+     */
+    private List<DronePathDetails> spatialSplitAssignment(
+            List<MedDispatchRec> dispatches,
+            Map<String, Drone> droneLookup,
+            Map<String, ServicePoints> droneToServicePoint,
+            List<RestrictedArea> restrictedAreas,
+            Map<String, List<DroneAvailabilityDetails>> availabilityMap,
+            Set<String> usedDroneIds,
+            double lngRange,
+            double latRange) {
+
+        List<MedDispatchRec> sortedDispatches = new ArrayList<>(dispatches);
+        boolean splitByLongitude = lngRange >= latRange;
+
+        if (splitByLongitude) {
+            sortedDispatches.sort(Comparator.comparingDouble(d -> d.getDelivery().getLongitude()));
+        } else {
+            sortedDispatches.sort(Comparator.comparingDouble(d -> d.getDelivery().getLatitude()));
+        }
+
+        int splitIndex = findBestSplitPoint(sortedDispatches, lngRange, latRange);
+
+        List<MedDispatchRec> leftBatch = sortedDispatches.subList(0, splitIndex);
+        List<MedDispatchRec> rightBatch = sortedDispatches.subList(splitIndex, sortedDispatches.size());
+
+        // Recurse
         List<DronePathDetails> leftResults = assignDispatchesToMultipleDrones(
-                leftBatch, droneLookup, droneToServicePoint, restrictedAreas, availabilityMap, usedDroneIds);
+                leftBatch, droneLookup, droneToServicePoint, restrictedAreas,
+                availabilityMap, usedDroneIds);
 
         List<DronePathDetails> rightResults = assignDispatchesToMultipleDrones(
-                rightBatch, droneLookup, droneToServicePoint, restrictedAreas, availabilityMap, usedDroneIds);
+                rightBatch, droneLookup, droneToServicePoint, restrictedAreas,
+                availabilityMap, usedDroneIds);
 
-        // 6. Combine
+        // Combine
         List<DronePathDetails> combined = new ArrayList<>();
         combined.addAll(leftResults);
         combined.addAll(rightResults);
 
         return combined;
     }
-
     /**
      * Helper method to find a single drone that can handle all dispatches
      *

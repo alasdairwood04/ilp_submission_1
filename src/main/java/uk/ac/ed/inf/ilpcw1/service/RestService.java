@@ -5,6 +5,7 @@ import uk.ac.ed.inf.ilpcw1.data.LngLat;
 import uk.ac.ed.inf.ilpcw1.data.Region;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import uk.ac.ed.inf.ilpcw1.data.RestrictedArea;
 
 import java.util.List;
 
@@ -73,6 +74,25 @@ public class RestService {
      */
     public boolean isInRegion(LngLat position, Region region) {
         var vertices = region.getVertices();
+
+        // First, do a bounding box check for quick exclusion
+        double minLng = Double.MAX_VALUE;
+        double maxLng = -Double.MAX_VALUE;
+        double minLat = Double.MAX_VALUE;
+        double maxLat = -Double.MAX_VALUE;
+
+        for (LngLat v : vertices) {
+            if (v.getLongitude() < minLng) minLng = v.getLongitude();
+            if (v.getLongitude() > maxLng) maxLng = v.getLongitude();
+            if (v.getLatitude() < minLat) minLat = v.getLatitude();
+            if (v.getLatitude() > maxLat) maxLat = v.getLatitude();
+        }
+
+        if (position.getLongitude() < minLng || position.getLongitude() > maxLng ||
+                position.getLatitude() < minLat || position.getLatitude() > maxLat) {
+            return false;
+        }
+
         // logger to log the vertices
         Logger logger = LoggerFactory.getLogger(RestService.class);
 
@@ -81,10 +101,35 @@ public class RestService {
         if (onEdge) {
             return true;
         }
+            // Ray-casting algorithm to determine if the point is in the polygon
+        int intersectCount = getIntersectCount(position, vertices);
+        return intersectCount % 2 != 0;
+    }
 
+
+    public boolean isInRegionRestrictedArea(LngLat position, RestrictedArea region) {
+        var vertices = region.getVertices();
+        // logger to log the vertices
+        Logger logger = LoggerFactory.getLogger(RestService.class);
+
+        // Check if the point is on any of the polygon's edges
+        boolean onEdge = isPointOnPolygonEdge(position, vertices);
+        if (onEdge) {
+            return true;
+        }
         // Ray-casting algorithm to determine if the point is in the polygon
         int intersectCount = getIntersectCount(position, vertices);
         return intersectCount % 2 != 0;
+    }
+
+
+    public boolean isInNoFlyZone(LngLat position, List<RestrictedArea> noFlyZones) {
+        for (RestrictedArea region : noFlyZones) {
+            if (isInRegionRestrictedArea(position, region)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

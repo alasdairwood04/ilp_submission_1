@@ -280,7 +280,7 @@ public class DroneQueryService {
     private List<String> queryAvailableDronesInternal(
             List<MedDispatchRec> dispatches,
             Map<String, Drone> droneLookup,
-            Map<String, List<DroneAvailabilityDetails>> availabilityMap) { // Pass the map, not the raw list!
+            Map<String, List<DroneAvailabilityDetails>> availabilityMap) {
 
         Requirements aggregateRequirements = aggregateRequirements(dispatches);
         List<String> availableDrones = new ArrayList<>();
@@ -332,7 +332,7 @@ public class DroneQueryService {
     /**
      * Helper method to check if a drone meets the aggregated requirements
      *
-     * @param drone        to check
+     * @param drone to check
      * @param requirements aggregated requirements
      * @return true if drone meets requirements, false otherwise
      */
@@ -436,7 +436,7 @@ public class DroneQueryService {
     /**
      * Helper method to aggregate requirements from multiple dispatch records
      *
-     * @param dispatches
+     * @param dispatches list of dispatch records
      * @return aggregated requirements
      */
     private Requirements aggregateRequirements(List<MedDispatchRec> dispatches) {
@@ -518,13 +518,24 @@ public class DroneQueryService {
         // fetch drone availability
         List<DroneServicePointRequest> dronesForServicePoints = ilpServiceClient.getDroneAvailability();
 
-        // fetch service points locations
-        List<ServicePoints> servicePoints = ilpServiceClient.getServicePoints();
-
         // fetch restricted areas
         List<RestrictedArea> restrictedAreas = ilpServiceClient.getRestrictedAreas();
 
-        // build availability map <droneID, availabilityDetails>
+        // check if dispatch coordinate is inside a non-fly zone
+        for (MedDispatchRec record : dispatches) {
+            LngLat deliveryLocation = record.getDelivery();
+            if (restService.isInNoFlyZone(deliveryLocation, restrictedAreas)) {
+                logger.error("Dispatch ID {} has delivery location inside a no-fly zone: {}",
+                        record.getId(), deliveryLocation);
+                throw new InvalidRequestException("Dispatch ID " + record.getId() +
+                        " has delivery location inside a no-fly zone: " + deliveryLocation);
+            }
+        }
+
+        // fetch service points locations
+        List<ServicePoints> servicePoints = ilpServiceClient.getServicePoints();
+
+        // build availability map
         Map<String, List<DroneAvailabilityDetails>> availabilityMap = buildAvailabilityMap(dronesForServicePoints);
 
         // ID to Drone object map
@@ -597,9 +608,9 @@ public class DroneQueryService {
             Map<String, List<DroneAvailabilityDetails>> availabilityMap,
             Set<String> usedDroneIds) {
 
-        logger.info("Dispatch length: {}", dispatches.size());
+        logger.info("Assigning dispatches. Batch size: {}", dispatches.size());
 
-        // Base Case: Try to assign all dispatches to a single drone
+        // base case: try to assign all dispatches to a single drone
         Optional<DronePathDetails> singleDronePath = findSingleDroneForAllDispatches(
                 dispatches,
                 droneLookup,
@@ -611,17 +622,38 @@ public class DroneQueryService {
 
         if (singleDronePath.isPresent()) {
             usedDroneIds.add(singleDronePath.get().getDroneId());
-            return List.of(singleDronePath.get());
+            return new ArrayList<>(List.of(singleDronePath.get()));
         }
 
-        // Failure/Base Case
-        if (dispatches.size() <= 1) {
-            logger.error("Dispatch ID {} cannot be delivered by any available drone.",
-                    dispatches.getFirst().getId());
-            throw new RuntimeException("Undeliverable dispatch " + dispatches.getFirst().getId());
+        // 2. failure base case: single item cannot be delivered
+        if (dispatches.size() == 1) {
+            logger.error("Dispatch ID {} cannot be delivered by any available drone (Constraint/Range/No-Fly).",
+                    dispatches.get(0).getId());
+            throw new RuntimeException("Undeliverable dispatch " + dispatches.get(0).getId());
         }
 
-        // Determine if dispatches are co-located or spatially distributed
+        // 3 constraint-based splitting - (mix of cooling/heating vs standard)
+        // Check for Cooling mix
+        boolean hasCooling = dispatches.stream().anyMatch(d -> Boolean.TRUE.equals(d.getRequirements().getCooling()));
+        boolean hasNonCooling = dispatches.stream().anyMatch(d -> !Boolean.TRUE.equals(d.getRequirements().getCooling()));
+
+        if (hasCooling && hasNonCooling) {
+            logger.info("Splitting batch by COOLING constraint.");
+            return splitByConstraint(dispatches, d -> Boolean.TRUE.equals(d.getRequirements().getCooling()),
+                    droneLookup, droneToServicePoint, restrictedAreas, availabilityMap, usedDroneIds);
+        }
+
+        // Check for Heating mix (only if not already split by cooling)
+        boolean hasHeating = dispatches.stream().anyMatch(d -> Boolean.TRUE.equals(d.getRequirements().getHeating()));
+        boolean hasNonHeating = dispatches.stream().anyMatch(d -> !Boolean.TRUE.equals(d.getRequirements().getHeating()));
+
+        if (hasHeating && hasNonHeating) {
+            logger.info("Splitting batch by HEATING constraint.");
+            return splitByConstraint(dispatches, d -> Boolean.TRUE.equals(d.getRequirements().getHeating()),
+                    droneLookup, droneToServicePoint, restrictedAreas, availabilityMap, usedDroneIds);
+        }
+
+        // 4. spatial analysis - determining if dispatches are co-located or spatially distributed
         double minLng = Double.MAX_VALUE, maxLng = -Double.MAX_VALUE;
         double minLat = Double.MAX_VALUE, maxLat = -Double.MAX_VALUE;
 
@@ -636,7 +668,8 @@ public class DroneQueryService {
         double lngRange = maxLng - minLng;
         double latRange = maxLat - minLat;
 
-        final double COLOCATION_THRESHOLD = 0.0001; // ~10 meters
+        // threshold of 0.0015 degrees (~167 meters)
+        final double COLOCATION_THRESHOLD = 0.0015;
         boolean isColocated = (lngRange < COLOCATION_THRESHOLD && latRange < COLOCATION_THRESHOLD);
 
         if (isColocated) {
@@ -667,8 +700,52 @@ public class DroneQueryService {
     }
 
     /**
+     * Helper method to split dispatches by a given constraint
+     * @param dispatches list of dispatch records
+     * @param condition predicate to split by
+     * @param droneLookup map of drone ID to Drone object
+     * @param droneToServicePoint map of drone ID to service point
+     * @param restrictedAreas list of restricted areas
+     * @param availabilityMap map of drone availability details
+     * @param usedDroneIds set of already used drone IDs
+     * @return list of DronePathDetails for assigned drones
+     */
+    private List<DronePathDetails> splitByConstraint(
+            List<MedDispatchRec> dispatches,
+            java.util.function.Predicate<MedDispatchRec> condition,
+            Map<String, Drone> droneLookup,
+            Map<String, ServicePoints> droneToServicePoint,
+            List<RestrictedArea> restrictedAreas,
+            Map<String, List<DroneAvailabilityDetails>> availabilityMap,
+            Set<String> usedDroneIds) {
+
+        List<MedDispatchRec> trueBatch = new ArrayList<>();
+        List<MedDispatchRec> falseBatch = new ArrayList<>();
+
+        for (MedDispatchRec d : dispatches) {
+            if (condition.test(d)) {
+                trueBatch.add(d);
+            } else {
+                falseBatch.add(d);
+            }
+        }
+
+        List<DronePathDetails> results = new ArrayList<>();
+        // recurse on both halves
+        results.addAll(assignDispatchesToMultipleDrones(trueBatch, droneLookup, droneToServicePoint, restrictedAreas, availabilityMap, usedDroneIds));
+        results.addAll(assignDispatchesToMultipleDrones(falseBatch, droneLookup, droneToServicePoint, restrictedAreas, availabilityMap, usedDroneIds));
+        return results;
+    }
+
+    /**
      * Greedy capacity-based assignment for co-located dispatches
-     * Packs as many dispatches as possible into each drone before moving to the next
+     * @param dispatches list of dispatch records
+     * @param droneLookup map of drone ID to Drone object
+     * @param droneToServicePoint map of drone ID to service point
+     * @param restrictedAreas list of restricted areas
+     * @param availabilityMap map of drone availability details
+     * @param usedDroneIds set of already used drone IDs
+     * @return list of DronePathDetails for assigned drones
      */
     private List<DronePathDetails> greedyCapacityAssignment(
             List<MedDispatchRec> dispatches,
@@ -680,6 +757,9 @@ public class DroneQueryService {
 
         List<DronePathDetails> allPaths = new ArrayList<>();
         List<MedDispatchRec> remaining = new ArrayList<>(dispatches);
+
+        // Cache drones that cannot reach this location
+        Set<String> unreachableDrones = new HashSet<>();
 
         // Sort dispatches by capacity (largest first) for better packing
         remaining.sort(Comparator.comparingDouble(d ->
@@ -693,6 +773,7 @@ public class DroneQueryService {
                     availabilityMap
             ).stream()
                     .filter(id -> !usedDroneIds.contains(id))
+                    .filter(id -> !unreachableDrones.contains(id)) // Filter out known unreachable drones
                     .collect(Collectors.toList());
 
             if (candidates.isEmpty()) {
@@ -703,6 +784,7 @@ public class DroneQueryService {
             // Sort candidates by capacity (largest first) and proximity
             LngLat targetLocation = remaining.get(0).getDelivery();
             candidates.sort((id1, id2) -> {
+                // ... (sorting logic remains same) ...
                 Drone d1 = droneLookup.get(id1);
                 Drone d2 = droneLookup.get(id2);
 
@@ -764,6 +846,13 @@ public class DroneQueryService {
                             restrictedAreas
                     );
 
+                    // Check if pathDetails is null (pathfinding failed)
+                    if (pathDetails == null) {
+                        logger.debug("Drone {} failed pathfinding for greedy batch. Marking as unreachable.", droneId);
+                        unreachableDrones.add(droneId); // Cache this failure!
+                        continue; // Skip this drone, try the next candidate
+                    }
+
                     // Verify the route is valid (within move limits)
                     int totalMoves = pathDetails.getDeliveries().stream()
                             .mapToInt(d -> d.getFlightPath().size())
@@ -797,7 +886,7 @@ public class DroneQueryService {
             }
 
             if (!foundAssignment) {
-                // If we couldn't assign even a single dispatch, it's undeliverable
+                // ... (error handling) ...
                 logger.error("Could not find suitable drone for dispatch {}", remaining.get(0).getId());
                 throw new RuntimeException("Undeliverable dispatch " + remaining.get(0).getId());
             }
@@ -808,6 +897,15 @@ public class DroneQueryService {
 
     /**
      * Spatial split assignment for distributed dispatches
+     * @param dispatches list of dispatch records
+     * @param droneLookup map of drone ID to Drone object
+     * @param droneToServicePoint map of drone ID to service point
+     * @param restrictedAreas list of restricted areas
+     * @param availabilityMap map of drone availability details
+     * @param usedDroneIds set of already used drone IDs
+     * @param lngRange range of longitudes
+     * @param latRange range of latitudes
+     * @return list of DronePathDetails for assigned drones
      */
     private List<DronePathDetails> spatialSplitAssignment(
             List<MedDispatchRec> dispatches,
@@ -830,6 +928,7 @@ public class DroneQueryService {
 
         int splitIndex = findBestSplitPoint(sortedDispatches, lngRange, latRange);
 
+        // Split
         List<MedDispatchRec> leftBatch = sortedDispatches.subList(0, splitIndex);
         List<MedDispatchRec> rightBatch = sortedDispatches.subList(splitIndex, sortedDispatches.size());
 
@@ -864,65 +963,100 @@ public class DroneQueryService {
             Map<String, ServicePoints> droneToServicePoint,
             List<RestrictedArea> restrictedAreas,
             Map<String, List<DroneAvailabilityDetails>> availabilityMap,
-            Set<String> ignoredDroneIds) { // Drones already used in other assignments
+            Set<String> ignoredDroneIds) {
 
-
-        // Get candidates
+        // 1. get candidates based on capabilities and time availability
         List<String> candidateDrones = queryAvailableDronesInternal(dispatches, droneLookup, availabilityMap)
                 .stream()
-                .filter(id -> !ignoredDroneIds.contains(id)) // Exclude used drones
+                .filter(id -> !ignoredDroneIds.contains(id))
                 .collect(Collectors.toList());
 
-        // Sort candidates to check "best" drones first
-        if (!dispatches.isEmpty()) {
-            // We use the first dispatch location as the target for our proximity heuristic
-            // (Minimizing the approach flight is usually the biggest variable factor)
-            LngLat targetLocation = dispatches.getFirst().getDelivery();
-
-            candidateDrones.sort((id1, id2) -> {
-                Drone drone1 = droneLookup.get(id1);
-                Drone drone2 = droneLookup.get(id2);
-                ServicePoints sp1 = droneToServicePoint.get(id1);
-                ServicePoints sp2 = droneToServicePoint.get(id2);
-
-                // Factor 1: Proximity (Distance from Base to First Order)
-                // We want the drone closest to the start point (Ascending order)
-                double dist1 = restService.calculateDistance(sp1.getLocation(), targetLocation);
-                double dist2 = restService.calculateDistance(sp2.getLocation(), targetLocation);
-                int distanceComparison = Double.compare(dist1, dist2);
-
-                if (distanceComparison != 0) {
-                    return distanceComparison;
-                }
-
-                // Factor 2: Capacity (Max Moves)
-                // If distances are roughly equal, prefer the drone with MORE range (Descending order)
-                // This increases the likelihood of completing a long path.
-                return Integer.compare(
-                        drone2.getCapability().getMaxMoves(),
-                        drone1.getCapability().getMaxMoves()
-                );
-            });
-        }
-
-        logger.info("Found {} candidate drones. Sorted by proximity to dispatch #{}",
-                candidateDrones.size(),
-                dispatches.isEmpty() ? "?" : dispatches.get(0).getId());
-
+        logger.info("Found {} candidate drones for all dispatches", candidateDrones.size());
         logger.info("The candidate drone IDs are: {}", candidateDrones);
 
-        // 3. Try each candidate drone
+        if (candidateDrones.isEmpty() || dispatches.isEmpty()) {
+            return Optional.empty();
+        }
+
+        // 2. pre-calculate route metrics for sorting
+        LngLat firstTarget = dispatches.get(0).getDelivery();
+        LngLat lastTarget = dispatches.get(dispatches.size() - 1).getDelivery();
+
+        // calculate the internal distance of the route
+        double internalRouteDist = 0.0;
+        for (int i = 0; i < dispatches.size() - 1; i++) {
+            internalRouteDist += restService.calculateDistance(
+                    dispatches.get(i).getDelivery(),
+                    dispatches.get(i + 1).getDelivery()
+            );
+        }
+        final double routeFixedDist = internalRouteDist;
+
+        // find the closest ServicePoint to the START of the dispatch list
+        ServicePoints globalNearestSP = findNearestServicePoint(
+                firstTarget,
+                droneToServicePoint.values()
+        );
+
+        // 3. sort candidates to check "Cheapest & Closest" drones first
+        candidateDrones.sort((id1, id2) -> {
+            Drone drone1 = droneLookup.get(id1);
+            Drone drone2 = droneLookup.get(id2);
+            ServicePoints sp1 = droneToServicePoint.get(id1);
+            ServicePoints sp2 = droneToServicePoint.get(id2);
+
+            // Metric 1: locality to the specific Service Point closest to the pickup
+            boolean isLocal1 = sp1.getId().equals(globalNearestSP.getId());
+            boolean isLocal2 = sp2.getId().equals(globalNearestSP.getId());
+            if (isLocal1 != isLocal2) return isLocal1 ? -1 : 1;
+
+            // Metric 2: Estimated Total Cost
+            double dist1 = restService.calculateDistance(sp1.getLocation(), firstTarget)
+                    + routeFixedDist
+                    + restService.calculateDistance(lastTarget, sp1.getLocation());
+
+            double dist2 = restService.calculateDistance(sp2.getLocation(), firstTarget)
+                    + routeFixedDist
+                    + restService.calculateDistance(lastTarget, sp2.getLocation());
+
+            double estMoves1 = dist1 / 0.00015;
+            double estMoves2 = dist2 / 0.00015;
+
+            double cost1 = (drone1.getCapability().getCostInitial() + drone1.getCapability().getCostFinal())
+                    + (estMoves1 * drone1.getCapability().getCostPerMove());
+
+            double cost2 = (drone2.getCapability().getCostInitial() + drone2.getCapability().getCostFinal())
+                    + (estMoves2 * drone2.getCapability().getCostPerMove());
+
+            int costCompare = Double.compare(cost1, cost2);
+            if (costCompare != 0) return costCompare;
+
+            // Metric 3: euclidean Proximity (Tie-breaker)
+            return Double.compare(dist1, dist2);
+        });
+
+        logger.info("Evaluating {} candidate drones for {} dispatches", candidateDrones.size(), dispatches.size());
+
+        // 4. try pathfinding on sorted candidates
         for (String droneId : candidateDrones) {
             logger.info("Evaluating drone {}", droneId);
             Drone drone = droneLookup.get(droneId);
             ServicePoints startPoint = droneToServicePoint.get(droneId);
 
-            if (startPoint == null) {
-                logger.warn("No service point found for drone {}", droneId);
+            // euclidean Check
+            double distOut = restService.calculateDistance(startPoint.getLocation(), firstTarget);
+            double distBack = restService.calculateDistance(lastTarget, startPoint.getLocation());
+            double minEuclideanDistance = distOut + routeFixedDist + distBack;
+            int minPossibleMoves = (int) Math.ceil(minEuclideanDistance / 0.00015);
+
+            if (minPossibleMoves > drone.getCapability().getMaxMoves()) {
+                logger.debug("Skipping drone {}: Range insufficient (Min moves {} > Max {})",
+                        droneId, minPossibleMoves, drone.getCapability().getMaxMoves());
                 continue;
             }
 
-            // Try to build a route with this drone
+            // build route
+            logger.debug("Attempting route with drone {}", droneId);
             DronePathDetails pathDetails = buildDroneRoute(
                     drone,
                     startPoint,
@@ -930,74 +1064,54 @@ public class DroneQueryService {
                     restrictedAreas
             );
 
-            logger.info("Built route for drone {}: {} deliveries", droneId,
-                    pathDetails != null ? pathDetails.getDeliveries().size() : 0);
-
-            if (pathDetails.getDeliveries().size() != dispatches.size() + 1) {
-                logger.debug("Drone {} could not find paths for all dispatches. Skipping.", droneId);
-                continue;
+            if (pathDetails == null) {
+                logger.debug("Drone {} failed pathfinding (unreachable). Skipping.", droneId);
+                continue; // Pathfinding failed (unreachable)
             }
 
-            // calculate total moves - size - 1 steps + 1 extra for hover at each delivery
+            // validate Moves
             int totalMoves = pathDetails.getDeliveries().stream()
-                    .mapToInt(d -> d.getFlightPath().size()) // not -1 because hover is included as repeated point
+                    .mapToInt(d -> d.getFlightPath().size())
                     .sum();
 
-
             if (totalMoves <= drone.getCapability().getMaxMoves()) {
+                // Validate Max Cost Constraints
+                double cost = calculateDroneCost(drone, totalMoves);
+                double costPerDispatch = cost / dispatches.size();
 
-                double costPerMove = drone.getCapability().getCostPerMove();
-                double fixedCost = drone.getCapability().getCostInitial() + drone.getCapability().getCostFinal();
-                double totalCost = fixedCost + (costPerMove * totalMoves);
-
-                logger.info("Drone {} total moves: {}, total cost: {}", droneId, totalMoves, totalCost);
-
-                logger.info("the number of dispatches is: {}", dispatches.size());
-
-                // pro-rota cost (total cost / number of dispatches)
-                double costPerDispatch = totalCost / dispatches.size();
-
-                boolean meetsAllCostConstraints = dispatches.stream()
+                boolean costOk = dispatches.stream()
                         .allMatch(d -> d.getRequirements().getMaxCost() == null ||
                                 costPerDispatch <= d.getRequirements().getMaxCost());
 
-                if (meetsAllCostConstraints) {
-                    logger.info("Single drone {} can handle all dispatches. The cost per dispatch is: {} and the drones max allowed cost is: {}",
-                            droneId, costPerDispatch,
-                            dispatches.stream()
-                                    .map(MedDispatchRec::getRequirements)
-                                    .map(Requirements::getMaxCost)
-                                    .filter(Objects::nonNull)
-                                    .max(Double::compareTo)
-                                    .orElse(Double.MAX_VALUE)
-                    );
+                if (costOk) {
+                    logger.info("Selected drone {} (Cost: {}, Moves: {})", droneId, cost, totalMoves);
                     return Optional.of(pathDetails);
                 } else {
-                    logger.info("Drone {} route exceeds max cost constraints. The cost per dispatch is: {} and the drones max allowed cost is: {}",
-                            droneId, costPerDispatch,
-                            dispatches.stream()
-                                    .map(MedDispatchRec::getRequirements)
-                                    .map(Requirements::getMaxCost)
-                                    .filter(Objects::nonNull)
-                                    .max(Double::compareTo)
-                                    .orElse(Double.MAX_VALUE)
-                    );
+                    logger.debug("Drone {} valid path but too expensive ({})", droneId, costPerDispatch);
                 }
             }
         }
+
         return Optional.empty();
     }
 
-
+    /**
+     * Finds the best split point in a sorted list of dispatches based on gaps
+     *
+     * @param sorted   list of sorted dispatch records
+     * @param lngRange range of longitudes
+     * @param latRange range of latitudes
+     * @return index to split the list at
+     */
     private int findBestSplitPoint(List<MedDispatchRec> sorted, double lngRange, double latRange) {
         if (sorted.size() <= 2) return 1;
 
         double maxGapScore = 0;
-        int bestSplit = sorted.size() / 2;  // Default to middle
+        int bestSplit = sorted.size() / 2;  // default to middle
 
         boolean isLongitude = lngRange >= latRange;
 
-        // Look for the biggest gap near the middle
+        // look for the biggest gap near the middle
         for (int i = 1; i < sorted.size(); i++) {
             double gap = isLongitude
                     ? sorted.get(i).getDelivery().getLongitude() -
@@ -1005,14 +1119,14 @@ public class DroneQueryService {
                     : sorted.get(i).getDelivery().getLatitude() -
                     sorted.get(i - 1).getDelivery().getLatitude();
 
-            // Normalize gap by total range
+            // normalize gap by total range
             double normalizedGap = gap / (isLongitude ? lngRange : latRange);
 
-            // Prefer splits near middle (penalty for extreme splits)
+            // prefer splits near middle (penalty for extreme splits)
             double distanceFromMiddle = Math.abs(i - sorted.size() / 2.0);
             double balancePenalty = 1.0 - (distanceFromMiddle / sorted.size());
 
-            // Combined score: larger gaps near middle are best
+            // combined score: larger gaps near middle are best
             double score = normalizedGap * balancePenalty;
 
             if (score > maxGapScore) {
@@ -1021,7 +1135,7 @@ public class DroneQueryService {
             }
         }
 
-        logger.info("Split at index {} (gap score: {:.4f})", bestSplit, maxGapScore);
+        logger.info("Split at index {} (gap score: {})", bestSplit, maxGapScore);
         return bestSplit;
     }
 
@@ -1029,11 +1143,11 @@ public class DroneQueryService {
     /**
      * creates a flight path for a drone (SP -> D1 -> D2 -> ... -> SP) with hover points
      *
-     * @param drone
-     * @param startPoint
-     * @param dispatches
-     * @param restrictedAreas
-     * @return
+     * @param drone drone to use
+     * @param startPoint starting service point
+     * @param dispatches list of dispatch records
+     * @param restrictedAreas list of restricted areas
+     * @return DronePathDetails with flight paths, or null if pathfinding fails
      */
     private DronePathDetails buildDroneRoute(
             Drone drone,
@@ -1044,62 +1158,61 @@ public class DroneQueryService {
         List<Deliveries> deliveries = new ArrayList<>();
         LngLat currentPos = startPoint.getLocation();
 
-        // 1. Process all dispatches
+        // 1. process all dispatches
         for (MedDispatchRec dispatch : dispatches) {
-            // Assumption: dispatch.getDelivery() returns the target LngLat
             LngLat deliveryLocation = dispatch.getDelivery();
 
-            // Find path
+            // find path
             List<LngLat> pathToDelivery = pathfindingService.findPath(
                     currentPos,
                     deliveryLocation,
                     restrictedAreas
             );
 
-//            logger.info("Path to delivery {}: {}", dispatch.getId(), pathToDelivery);
+            if (pathToDelivery == null || pathToDelivery.isEmpty()) {
+                return null;
+            }
 
-            // Safety check if no path found (handle as needed, here assuming valid)
-            if (pathToDelivery == null || pathToDelivery.isEmpty()) continue;
-
-            // Create full path list
+            // create full path list
             List<LngLat> fullPath = new ArrayList<>(pathToDelivery);
 
-            // Add Hover: Append the LAST point of the path again.
-            // This creates the pair [..., ArrivedPos, ArrivedPos] which represents the hover.
-            // Note: We use the actual arrived position to ensure path continuity.
+            // add Hover
             LngLat arrivedPos = fullPath.get(fullPath.size() - 1);
             fullPath.add(arrivedPos);
 
-            // Add delivery record
+            // add delivery record
             deliveries.add(Deliveries.builder()
                     .deliveryId(dispatch.getId())
                     .flightPath(fullPath)
                     .build());
 
-            // Update current position for the next leg
+            // update current position for the next leg
             currentPos = arrivedPos;
         }
 
-        // 2. Handle Return Leg as a distinct "Delivery"
+        // 2. Handle Return Leg
         List<LngLat> returnPath = pathfindingService.findPath(
                 currentPos,
                 startPoint.getLocation(),
                 restrictedAreas
         );
 
-        if (returnPath != null && !returnPath.isEmpty()) {
-            List<LngLat> fullReturnPath = new ArrayList<>(returnPath);
-
-            // Add Hover at Service Point (required by spec for the return leg too)
-            LngLat arrivedAtService = fullReturnPath.get(fullReturnPath.size() - 1);
-            fullReturnPath.add(arrivedAtService);
-
-            // Add as a distinct item with null ID
-            deliveries.add(Deliveries.builder()
-                    .deliveryId(null) // Explicitly null for return leg
-                    .flightPath(fullReturnPath)
-                    .build());
+        // If the drone can't get home, the route is invalid.
+        if (returnPath == null || returnPath.isEmpty()) {
+            return null;
         }
+
+        List<LngLat> fullReturnPath = new ArrayList<>(returnPath);
+
+        // add Hover at Service Point
+        LngLat arrivedAtService = fullReturnPath.get(fullReturnPath.size() - 1);
+        fullReturnPath.add(arrivedAtService);
+
+        // add return leg
+        deliveries.add(Deliveries.builder()
+                .deliveryId(null)
+                .flightPath(fullReturnPath)
+                .build());
 
         return DronePathDetails.builder()
                 .droneId(drone.getId())
@@ -1107,16 +1220,41 @@ public class DroneQueryService {
                 .build();
     }
 
+
+    /**
+     * Calculates the total cost for a drone given the number of moves
+     *
+     * @param drone drone to calculate cost for
+     * @param moves number of moves made
+     * @return total cost
+     */
     private double calculateDroneCost(Drone drone, int moves) {
         DroneCapability cap = drone.getCapability();
         return cap.getCostInitial() + cap.getCostFinal() + (moves * cap.getCostPerMove());
     }
 
+    /**
+     * Calculates the pro-rata cost per delivery for a drone
+     *
+     * @param drone        drone to calculate cost for
+     * @param totalMoves   total number of moves made
+     * @param numDeliveries number of deliveries made
+     * @return pro-rata cost per delivery
+     */
     private double calculateProRataCost(Drone drone, int totalMoves, int numDeliveries) {
         double totalCost = calculateDroneCost(drone, totalMoves);
         return totalCost / numDeliveries;
     }
 
+
+    /**
+     * Checks if the pro-rata cost violates any maxCost constraints
+     *
+     * @param newProRataCost calculated pro-rata cost
+     * @param existingRoute  list of existing dispatch records
+     * @param newDispatch    new dispatch record to check
+     * @return true if any maxCost constraint is violated, false otherwise
+     */
     private boolean violatesMaxCost(double newProRataCost,
                                     List<MedDispatchRec> existingRoute,
                                     MedDispatchRec newDispatch) {
@@ -1170,7 +1308,12 @@ public class DroneQueryService {
         return droneServicePointMap;
     }
 
-    public GeoJsonLineString calcDeliveryPathAsGeoJson(List<MedDispatchRec> dispatches) {
+    /**
+     * Calculates the delivery path for a list of dispatches as a GeoJSON LineString
+     * @param dispatches list of dispatch records
+     * @return GeoJsonLineString representing the delivery path
+     */
+        public GeoJsonLineString calcDeliveryPathAsGeoJson(List<MedDispatchRec> dispatches) {
         logger.info("Calculating GeoJSON path for {} dispatch records", dispatches.size());
 
         // 1. Fetch all necessary data

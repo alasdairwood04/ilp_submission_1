@@ -35,7 +35,6 @@ public class ILPServiceClient {
      * Fetch all drones from the ILP REST Service
      * @return List of all drones
      */
-
     public List<Drone> getAllDrones() {
         try {
             String url = ilpEndpoint + "drones";
@@ -78,6 +77,10 @@ public class ILPServiceClient {
         }
     }
 
+    /**
+     * Fetch all service points from the ILP REST Service
+     * @return List of all service points
+     */
     public List<ServicePoints> getServicePoints() {
         try {
             String url = ilpEndpoint + "service-points";
@@ -97,6 +100,10 @@ public class ILPServiceClient {
         }
     }
 
+    /**
+     * Fetch all restricted areas from the ILP REST Service
+     * @return List of all restricted areas
+     */
     public List<RestrictedArea> getRestrictedAreas() {
         try {
             String url = ilpEndpoint + "restricted-areas";

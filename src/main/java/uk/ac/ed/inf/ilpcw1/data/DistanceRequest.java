@@ -6,6 +6,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Represents a query attribute for distance calculation between two positions
+ */
 
 @Data
 @AllArgsConstructor

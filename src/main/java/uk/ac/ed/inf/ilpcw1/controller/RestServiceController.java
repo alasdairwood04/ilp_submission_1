@@ -9,6 +9,7 @@ import uk.ac.ed.inf.ilpcw1.service.RestService;
 import uk.ac.ed.inf.ilpcw1.service.ValidationService;
 
 import java.util.List;
+import java.util.Map;
 
 
 @RestController
@@ -168,6 +169,11 @@ public class RestServiceController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * 6 Calculate delivery paths as GeoJSON LineString for a list of medical dispatch records.
+     * @param medDispatchRecs - The list of medical dispatch records.
+     * @return - The delivery path as GeoJSON LineString.
+     */
     @PostMapping("/calcDeliveryPathAsGeoJson")
     public ResponseEntity<GeoJsonLineString> calculateDeliveryPathAsGeo(@RequestBody List<MedDispatchRec> medDispatchRecs) {
         // Validate request body
@@ -176,6 +182,6 @@ public class RestServiceController {
         }
 
         GeoJsonLineString response = droneQueryService.calcDeliveryPathAsGeoJson(medDispatchRecs);
-        return ResponseEntity.ok(response);    }
-
+        return ResponseEntity.ok(response);
+    }
 }
